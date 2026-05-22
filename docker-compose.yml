@@ -1,0 +1,34 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://turon:turon@db:5432/turonbank
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: turon
+      POSTGRES_PASSWORD: turon
+      POSTGRES_DB: turonbank
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:
