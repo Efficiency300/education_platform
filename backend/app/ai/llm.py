@@ -1,9 +1,11 @@
-"""Обёртка LLM с fallback на детерминированный mock, если нет API-ключа.
+"""Обёртка LLM с fallback на детерминированный mock.
 
-Это позволяет запускать MVP без внешних зависимостей — чатбот будет
-отвечать выдержками из найденных RAG-фрагментов.
+Поддерживает обычные ответы и стриминг (SSE).
 """
 from __future__ import annotations
+
+import asyncio
+from typing import AsyncIterator
 
 from app.core.config import settings
 from app.ai.rag import Chunk
@@ -23,12 +25,12 @@ def _build_context(chunks: list[tuple[Chunk, float]]) -> str:
     if not chunks:
         return "(нет релевантных фрагментов)"
     parts = []
-    for i, (chunk, score) in enumerate(chunks, 1):
+    for i, (chunk, _score) in enumerate(chunks, 1):
         parts.append(f"[Источник {i}: {chunk.doc_title}]\n{chunk.text}")
     return "\n\n".join(parts)
 
 
-def _mock_answer(question: str, chunks: list[tuple[Chunk, float]]) -> str:
+def _mock_answer(_question: str, chunks: list[tuple[Chunk, float]]) -> str:
     if not chunks:
         return (
             "В загруженных регламентах не нашлось точного ответа на ваш вопрос. "
@@ -44,9 +46,7 @@ def _mock_answer(question: str, chunks: list[tuple[Chunk, float]]) -> str:
     )
 
 
-async def generate_answer(
-    question: str, chunks: list[tuple[Chunk, float]]
-) -> str:
+async def generate_answer(question: str, chunks: list[tuple[Chunk, float]]) -> str:
     if not settings.anthropic_api_key:
         return _mock_answer(question, chunks)
 
@@ -67,3 +67,36 @@ async def generate_answer(
         messages=[{"role": "user", "content": user_msg}],
     )
     return "".join(block.text for block in resp.content if block.type == "text").strip()
+
+
+async def stream_answer(
+    question: str, chunks: list[tuple[Chunk, float]]
+) -> AsyncIterator[str]:
+    """Стрим ответа по токенам/чанкам."""
+    if not settings.anthropic_api_key:
+        text = _mock_answer(question, chunks)
+        # имитация стрима, чтобы UI чувствовал «живой» эффект
+        for word in text.split(" "):
+            await asyncio.sleep(0.02)
+            yield word + " "
+        return
+
+    try:
+        from anthropic import AsyncAnthropic
+    except ImportError:
+        yield _mock_answer(question, chunks)
+        return
+
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    user_msg = (
+        f"Фрагменты регламентов:\n\n{_build_context(chunks)}\n\n"
+        f"Вопрос сотрудника: {question}"
+    )
+    async with client.messages.stream(
+        model=settings.llm_model,
+        max_tokens=600,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_msg}],
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text

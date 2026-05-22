@@ -45,6 +45,9 @@ export interface ScenarioSummary {
   id: string;
   title: string;
   description: string;
+  icon: string;
+  difficulty: "easy" | "medium" | "hard";
+  estimated_minutes: number;
 }
 
 export interface ScenarioStep {
@@ -53,10 +56,7 @@ export interface ScenarioStep {
   options: { id: string; text: string; correct: boolean; feedback: string; points: number }[];
 }
 
-export interface Scenario {
-  id: string;
-  title: string;
-  description: string;
+export interface Scenario extends ScenarioSummary {
   customer: { name: string; document: string; purpose: string; avatar: string };
   steps: ScenarioStep[];
 }
@@ -95,11 +95,41 @@ export interface ProgressSummary {
   modules: ProgressModule[];
 }
 
+export interface LevelInfo {
+  level: number;
+  title: string;
+  xp: number;
+  xp_in_level: number;
+  xp_to_next: number;
+  progress_pct: number;
+}
+
+export interface Badge {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  earned: boolean;
+}
+
+export interface Gamification {
+  level: LevelInfo;
+  badges: Badge[];
+}
+
+export interface HealthInfo {
+  status: string;
+  llm_mode: "live" | "mock";
+  ispring_mode: "live" | "mock";
+  rag_chunks: number;
+  version: string;
+}
+
 export const api = {
   health: async () => {
     const res = await fetch("/health");
     if (!res.ok) throw new Error("health failed");
-    return res.json() as Promise<{ status: string; llm_mode: string; ispring_mode: string; rag_chunks: number }>;
+    return res.json() as Promise<HealthInfo>;
   },
   listUsers: () => request<User[]>("/users"),
   ask: (user_id: number, message: string) =>
@@ -121,9 +151,67 @@ export const api = {
       body: JSON.stringify({ session_id, step_id, option_id }),
     }),
   progress: (user_id: number) => request<ProgressSummary>(`/progress/${user_id}`),
+  badges: (user_id: number) => request<Gamification>(`/badges/${user_id}`),
   syncIspring: (user_id: number) =>
     request<{ mode: string; sent: object }>("/ispring/sync", {
       method: "POST",
       body: JSON.stringify({ user_id }),
     }),
 };
+
+/** Стрим SSE-чата. Возвращает функцию отмены. */
+export interface StreamHandlers {
+  onSources?: (sources: Source[]) => void;
+  onChunk?: (text: string) => void;
+  onDone?: (ms: number) => void;
+  onError?: (msg: string) => void;
+}
+
+export function streamChat(
+  user_id: number,
+  message: string,
+  handlers: StreamHandlers,
+): () => void {
+  const controller = new AbortController();
+  (async () => {
+    try {
+      const res = await fetch(`${BASE}/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ user_id, message }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        handlers.onError?.(`HTTP ${res.status}`);
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop() || "";
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          try {
+            const ev = JSON.parse(payload);
+            if (ev.type === "sources") handlers.onSources?.(ev.sources);
+            else if (ev.type === "chunk") handlers.onChunk?.(ev.text);
+            else if (ev.type === "done") handlers.onDone?.(ev.ms);
+            else if (ev.type === "error") handlers.onError?.(ev.message);
+          } catch {
+            /* skip malformed */
+          }
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== "AbortError") handlers.onError?.(e.message ?? String(e));
+    }
+  })();
+  return () => controller.abort();
+}

@@ -11,6 +11,9 @@ class ScenarioOut(BaseModel):
     id: str
     title: str
     description: str
+    icon: str = "book"
+    difficulty: str = "easy"
+    estimated_minutes: int = 5
     customer: dict
     steps: list[ScenarioStep]
 

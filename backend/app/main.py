@@ -1,13 +1,19 @@
+import logging
 from contextlib import asynccontextmanager
+
 from sqlalchemy import select
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.db.session import init_db, SessionLocal
 from app.db.models import User
 from app.ai.rag import rag_index
-from app.api import users, chat, simulator, progress, ispring
+from app.api import users, chat, simulator, progress, ispring, badges, hr_import
+
+setup_logging()
+log = logging.getLogger("app")
 
 
 async def _seed_demo_user() -> None:
@@ -33,11 +39,16 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _seed_demo_user()
     loaded = rag_index.load_dir(settings.regulations_path)
-    print(f"[startup] RAG: загружено {loaded} фрагментов из {settings.regulations_path}")
+    log.info(
+        "startup: RAG=%s chunks · LLM=%s · iSpring=%s",
+        loaded,
+        "live" if settings.anthropic_api_key else "mock",
+        "live" if settings.ispring_base_url else "mock",
+    )
     yield
 
 
-app = FastAPI(title="AI-Mentor: Turonbank", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="AI-Mentor: Turonbank", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,11 +66,17 @@ async def health():
         "llm_mode": "live" if settings.anthropic_api_key else "mock",
         "ispring_mode": "live" if settings.ispring_base_url else "mock",
         "rag_chunks": len(rag_index.chunks),
+        "version": app.version,
     }
 
 
-app.include_router(users.router, prefix="/api")
-app.include_router(chat.router, prefix="/api")
-app.include_router(simulator.router, prefix="/api")
-app.include_router(progress.router, prefix="/api")
-app.include_router(ispring.router, prefix="/api")
+for router in (
+    users.router,
+    chat.router,
+    simulator.router,
+    progress.router,
+    ispring.router,
+    badges.router,
+    hr_import.router,
+):
+    app.include_router(router, prefix="/api")

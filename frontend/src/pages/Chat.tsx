@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { api, User, Source } from "../api";
+import { motion, AnimatePresence } from "framer-motion";
+import { Send, Sparkles, FileText, ChevronDown, Bot, User as UserIcon } from "lucide-react";
+import { api, User, Source, streamChat } from "../api";
 
 interface Msg {
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
-  pending?: boolean;
+  streaming?: boolean;
 }
 
 const SUGGESTIONS = [
-  "Какой дресс-код по пятницам?",
-  "Что делать, если я опаздываю?",
-  "Какие шаги KYC при открытии счёта?",
-  "Сколько дней отпуска у стажёра?",
+  { label: "Дресс-код по пятницам", q: "Какой дресс-код по пятницам?" },
+  { label: "AML при открытии счёта", q: "Какие шаги KYC обязательны при открытии счёта?" },
+  { label: "Опоздание на работу", q: "Что делать, если я опаздываю?" },
+  { label: "Отпуск стажёра", q: "Сколько дней отпуска у стажёра?" },
 ];
 
 export default function Chat({ user }: { user: User }) {
@@ -20,106 +22,223 @@ export default function Chat({ user }: { user: User }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    api.history(user.id).then((h) => {
-      setMessages(
-        h.map((m) => ({ role: m.role, content: m.content }))
-      );
-    }).catch(console.error);
+    api.history(user.id)
+      .then((h) => setMessages(h.map((m) => ({ role: m.role, content: m.content }))))
+      .catch(console.error);
   }, [user.id]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const send = async (text?: string) => {
+  const send = (text?: string) => {
     const q = (text ?? input).trim();
     if (!q || busy) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: q }, { role: "assistant", content: "…", pending: true }]);
+    setMessages((m) => [
+      ...m,
+      { role: "user", content: q },
+      { role: "assistant", content: "", streaming: true },
+    ]);
     setBusy(true);
-    try {
-      const resp = await api.ask(user.id, q);
-      setMessages((m) => {
-        const copy = [...m];
-        copy[copy.length - 1] = {
-          role: "assistant",
-          content: resp.answer,
-          sources: resp.sources,
-        };
-        return copy;
-      });
-    } catch (e: any) {
-      setMessages((m) => {
-        const copy = [...m];
-        copy[copy.length - 1] = { role: "assistant", content: `Ошибка: ${e.message}` };
-        return copy;
-      });
-    } finally {
-      setBusy(false);
-    }
+
+    const cancel = streamChat(user.id, q, {
+      onSources: (sources) => {
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { ...copy[copy.length - 1], sources };
+          return copy;
+        });
+      },
+      onChunk: (chunk) => {
+        setMessages((m) => {
+          const copy = [...m];
+          const last = copy[copy.length - 1];
+          copy[copy.length - 1] = { ...last, content: last.content + chunk };
+          return copy;
+        });
+      },
+      onDone: () => {
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { ...copy[copy.length - 1], streaming: false };
+          return copy;
+        });
+        setBusy(false);
+      },
+      onError: (msg) => {
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", content: `Ошибка: ${msg}`, streaming: false };
+          return copy;
+        });
+        setBusy(false);
+      },
+    });
+    cancelRef.current = cancel;
+  };
+
+  const stop = () => {
+    cancelRef.current?.();
+    setBusy(false);
+    setMessages((m) => {
+      const copy = [...m];
+      if (copy.length && copy[copy.length - 1].streaming) {
+        copy[copy.length - 1] = { ...copy[copy.length - 1], streaming: false };
+      }
+      return copy;
+    });
   };
 
   return (
-    <>
-      <div className="page-header">
-        <div>
-          <h2>AI-ассистент</h2>
-          <p>Спросите про регламенты, дресс-код, процессы. Ответы основаны на загруженных документах.</p>
+    <div className="flex flex-col gap-6">
+      <div>
+        <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
+          <Sparkles size={14} className="text-gold-500" /> AI-наставник
         </div>
+        <h1 className="hero-text mt-2">Спроси что угодно</h1>
+        <p className="mt-3 max-w-xl text-base text-navy-900/60 dark:text-white/60">
+          Ответы основаны на регламентах Turonbank. Источники прилагаются к каждому ответу.
+        </p>
       </div>
 
-      <div className="chat-window">
-        <div className="chat-messages" ref={scrollRef}>
+      <div className="glass flex h-[calc(100vh-280px)] min-h-[480px] flex-col p-0">
+        <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto p-6">
           {messages.length === 0 && (
-            <div className="empty">
-              <p>Задайте свой первый вопрос или попробуйте один из примеров:</p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex h-full flex-col items-center justify-center gap-6 text-center"
+            >
+              <motion.div
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 200 }}
+                className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-navy-900 to-navy-700 text-gold-500 shadow-glass dark:from-gold-500 dark:to-gold-700 dark:text-navy-900"
+              >
+                <Bot size={28} strokeWidth={2.2} />
+              </motion.div>
+              <div>
+                <div className="font-display text-xl font-semibold">Здравствуйте 👋</div>
+                <div className="mt-1 text-sm text-navy-900/50 dark:text-white/50">
+                  Выберите вопрос или задайте свой
+                </div>
+              </div>
+              <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((s) => (
-                  <button key={s} className="btn btn-ghost btn-small" onClick={() => send(s)}>
-                    {s}
-                  </button>
+                  <motion.button
+                    key={s.q}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => send(s.q)}
+                    className="rounded-xl border border-navy-900/8 bg-white/50 px-4 py-3 text-left text-sm font-medium text-navy-900/80 transition hover:border-gold-500/40 hover:bg-white/80 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                  >
+                    {s.label}
+                  </motion.button>
                 ))}
               </div>
-            </div>
+            </motion.div>
           )}
-          {messages.map((m, i) => (
-            <div key={i} className={`msg ${m.role}`}>
-              {m.pending ? <span className="spinner" /> : m.content}
-              {m.sources && m.sources.length > 0 && (
-                <div className="msg-sources">
-                  <details>
-                    <summary>Источники ({m.sources.length})</summary>
-                    <ul>
-                      {m.sources.map((s, j) => (
-                        <li key={j}>
-                          <strong>{s.title}</strong> ({s.score})
-                          <div style={{ color: "var(--muted)" }}>{s.snippet}…</div>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
+
+          <AnimatePresence initial={false}>
+            {messages.map((m, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 280, damping: 24 }}
+                className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}
+              >
+                <div
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                    m.role === "user"
+                      ? "bg-navy-900 text-white dark:bg-white dark:text-navy-900"
+                      : "bg-gradient-to-br from-gold-400 to-gold-600 text-navy-900"
+                  }`}
+                >
+                  {m.role === "user" ? <UserIcon size={14} /> : <Bot size={14} />}
                 </div>
-              )}
-            </div>
-          ))}
+                <div className={`max-w-[78%] ${m.role === "user" ? "text-right" : ""}`}>
+                  <div
+                    className={`inline-block rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      m.role === "user"
+                        ? "rounded-tr-md bg-navy-900 text-white dark:bg-white dark:text-navy-900"
+                        : "rounded-tl-md border border-navy-900/8 bg-white/70 text-navy-900 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-white"
+                    }`}
+                  >
+                    <div className={m.streaming && m.content ? "streaming-cursor whitespace-pre-wrap" : "whitespace-pre-wrap"}>
+                      {m.content || (m.streaming && (
+                        <span className="inline-flex gap-1">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current opacity-60" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current opacity-60" style={{ animationDelay: "0.15s" }} />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current opacity-60" style={{ animationDelay: "0.3s" }} />
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {m.sources && m.sources.length > 0 && (
+                    <details className="mt-2 inline-block max-w-full text-left">
+                      <summary className="cursor-pointer list-none">
+                        <span className="chip">
+                          <FileText size={11} /> {m.sources.length} источников
+                          <ChevronDown size={11} />
+                        </span>
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {m.sources.map((s, j) => (
+                          <div
+                            key={j}
+                            className="rounded-xl border border-navy-900/8 bg-white/50 p-3 text-xs dark:border-white/10 dark:bg-white/5"
+                          >
+                            <div className="mb-1 flex items-center justify-between font-semibold">
+                              <span>{s.title}</span>
+                              <span className="text-navy-900/40 dark:text-white/40">★ {s.score}</span>
+                            </div>
+                            <div className="text-navy-900/60 dark:text-white/60">{s.snippet}…</div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
+
         <form
-          className="chat-form"
-          onSubmit={(e) => { e.preventDefault(); send(); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+          className="flex items-center gap-2 border-t border-navy-900/8 p-3 dark:border-white/8"
         >
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Спросите что-нибудь о Turonbank…"
             disabled={busy}
+            className="input"
           />
-          <button type="submit" className="btn" disabled={busy || !input.trim()}>
-            {busy ? "…" : "Отправить"}
-          </button>
+          {busy ? (
+            <button type="button" onClick={stop} className="btn-ghost">
+              Стоп
+            </button>
+          ) : (
+            <motion.button
+              type="submit"
+              whileTap={{ scale: 0.95 }}
+              disabled={!input.trim()}
+              className="btn-primary !rounded-full"
+            >
+              <Send size={14} />
+            </motion.button>
+          )}
         </form>
       </div>
-    </>
+    </div>
   );
 }
