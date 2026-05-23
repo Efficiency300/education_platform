@@ -12,6 +12,7 @@ from app.core.security import hash_password
 from app.db.session import init_db, SessionLocal
 from app.db.models import OnboardingFlow, Scenario, User
 from app.ai.rag import rag_index
+from app.ai.vector_store import vector_store
 from app.api import (
     users,
     chat,
@@ -329,6 +330,8 @@ async def lifespan(app: FastAPI):
     await _seed_demo_users()
     await _seed_default_flow()
     await _seed_default_scenario()
+    # Vector knowledge base — silent no-op when QDRANT_URL isn't set.
+    await vector_store.init()
     # Make sure the uploads directory exists so the StaticFiles mount works
     # even on a brand-new checkout.
     settings.uploads_path.mkdir(parents=True, exist_ok=True)

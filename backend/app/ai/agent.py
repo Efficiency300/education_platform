@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from app.ai.rag import Chunk, rag_index
+from app.ai.vector_store import VectorHit, vector_store
 from app.core.config import settings
 
 
@@ -371,13 +372,49 @@ def _build_context(chunks: list[tuple[Chunk, float]]) -> str:
     )
 
 
-async def agent_answer(question: str, top_k: int = 4) -> tuple[str, list[tuple[Chunk, float]]]:
+def _vector_hits_to_chunks(hits: list[VectorHit]) -> list[tuple[Chunk, float]]:
+    """Reshape Qdrant hits into the (Chunk, score) tuples the rest of the app
+    already understands. Keeps the chat / source UI untouched."""
+    return [
+        (
+            Chunk(doc_title=h.title or h.filename, text=h.text, source_path=h.filename),
+            h.score,
+        )
+        for h in hits
+    ]
+
+
+async def hybrid_retrieve(
+    question: str,
+    *,
+    top_k: int = 4,
+    direction: str | None = None,
+) -> list[tuple[Chunk, float]]:
+    """Try Qdrant first; if it's disabled or returns nothing, fall back to
+    BM25 over the local markdown corpus. Both surfaces (assistant + North)
+    use this so retrieval behaviour stays consistent."""
+    if vector_store.is_enabled():
+        try:
+            hits = await vector_store.search(question, top_k=top_k, direction=direction)
+        except Exception:
+            hits = []
+        if hits:
+            return _vector_hits_to_chunks(hits)
+    return rag_index.search(question, top_k=top_k)
+
+
+async def agent_answer(
+    question: str,
+    top_k: int = 4,
+    *,
+    direction: str | None = None,
+) -> tuple[str, list[tuple[Chunk, float]]]:
     """Single-turn RAG answer. Used by the AI assistant chat.
 
     Returns the (answer, sources) pair so the caller can stream the text and
     surface the source list to the user in one go.
     """
-    hits = rag_index.search(question, top_k=top_k)
+    hits = await hybrid_retrieve(question, top_k=top_k, direction=direction)
     llm = _build_llm()
     if llm is None:
         # Mock path — keep parity with the previous "mock answer" behaviour

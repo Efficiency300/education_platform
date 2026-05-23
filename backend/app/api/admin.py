@@ -12,13 +12,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.rag import rag_index
+from app.ai.vector_store import vector_store
 from app.core.config import settings
 from app.core.deps import current_user, require_role
 from app.core.security import hash_password
@@ -29,6 +30,7 @@ from app.db.models import (
     ChatMessage,
     CourseProgress,
     CustomCourse,
+    KnowledgeFile,
     LessonProgress,
     Progress,
     SimulatorSession,
@@ -105,6 +107,11 @@ class RegulationOut(BaseModel):
     filename: str
     size_bytes: int
     modified_at: datetime
+    # Direction the file belongs to ("Backend", "HR", ...). "" = unclassified.
+    direction: str = ""
+    title: str = ""
+    vector_count: int = 0
+    content_type: str = ""
 
 
 class SystemStats(BaseModel):
@@ -396,35 +403,82 @@ async def admin_delete_course(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/regulations", response_model=list[RegulationOut])
-async def admin_regulations():
-    """List every file inside the knowledge-base directory regardless of
-    extension. Only ``.md`` files end up in the BM25 index, but other formats
-    (PDF, video, presentations) are still listed so admins can manage them."""
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB ceiling per file
+
+
+async def _scan_orphans_into_db(db: AsyncSession) -> None:
+    """One-time backfill: if there are files on disk that don't yet have a
+    ``KnowledgeFile`` row, register them so the admin list matches reality.
+    We don't index orphans into Qdrant automatically — the admin can hit
+    "re-index" after assigning a direction."""
     p = settings.regulations_path
     if not p.exists():
-        return []
-    out = []
+        return
+    known = {
+        row.filename
+        for row in (await db.scalars(select(KnowledgeFile))).all()
+    }
     for f in sorted(p.iterdir()):
         if not f.is_file() or f.name.startswith("."):
             continue
+        if f.name in known:
+            continue
         st = f.stat()
-        out.append(
-            RegulationOut(
+        db.add(
+            KnowledgeFile(
                 filename=f.name,
+                direction="",
+                title=f.stem,
                 size_bytes=st.st_size,
-                modified_at=datetime.fromtimestamp(st.st_mtime),
+                content_type="application/octet-stream",
+                vector_count=0,
             )
         )
-    return out
+    await db.commit()
 
 
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB ceiling per file
+@router.get("/regulations", response_model=list[RegulationOut])
+async def admin_regulations(
+    direction: str | None = None,
+    db: AsyncSession = Depends(get_session),
+):
+    """List knowledge-base files. Optional ``direction`` query parameter
+    filters to a single direction so the admin panel can scope the view."""
+    await _scan_orphans_into_db(db)
+    stmt = select(KnowledgeFile).order_by(KnowledgeFile.created_at.desc())
+    if direction is not None and direction != "":
+        stmt = stmt.where(KnowledgeFile.direction == direction)
+    rows = (await db.scalars(stmt)).all()
+    return [
+        RegulationOut(
+            filename=r.filename,
+            size_bytes=r.size_bytes,
+            modified_at=r.updated_at or r.created_at,
+            direction=r.direction or "",
+            title=r.title or r.filename,
+            vector_count=r.vector_count or 0,
+            content_type=r.content_type or "",
+        )
+        for r in rows
+    ]
+
+
+@router.get("/regulations/directions")
+async def admin_regulation_directions(db: AsyncSession = Depends(get_session)):
+    """Distinct list of directions, for the upload-form autocomplete."""
+    rows = (
+        await db.scalars(
+            select(KnowledgeFile.direction).where(KnowledgeFile.direction != "").distinct()
+        )
+    ).all()
+    return {"directions": sorted({(r or "").strip() for r in rows if (r or "").strip()})}
 
 
 @router.post("/regulations/upload")
 async def admin_upload_regulation(
     file: UploadFile = File(...),
+    # Direction lives on the form so we can upload + classify in one round-trip.
+    direction: str = Form(""),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
@@ -437,20 +491,117 @@ async def admin_upload_regulation(
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "Файл больше 25 МБ")
     target.write_bytes(content)
+    direction_clean = (direction or "").strip()[:128]
 
-    # Re-index BM25 — only ``.md`` files contribute, but the call is safe to
-    # make on every upload so newly added markdown gets picked up immediately.
-    loaded = rag_index.load_dir(settings.regulations_path)
+    # Upsert the DB row first so we have a stable id for Qdrant payloads.
+    existing = await db.scalar(
+        select(KnowledgeFile).where(KnowledgeFile.filename == safe_name)
+    )
+    if existing is None:
+        record = KnowledgeFile(
+            filename=safe_name,
+            direction=direction_clean,
+            title=safe_name,
+            size_bytes=len(content),
+            content_type=file.content_type or "application/octet-stream",
+            uploaded_by=user.id,
+        )
+        db.add(record)
+        await db.flush()
+    else:
+        record = existing
+        record.direction = direction_clean
+        record.size_bytes = len(content)
+        record.content_type = file.content_type or record.content_type
+        record.uploaded_by = user.id
+        await db.flush()
+
+    # BM25 still indexes the on-disk markdown files (legacy compatibility, and
+    # the user-facing fallback path when Qdrant isn't running).
+    bm25_chunks = rag_index.load_dir(settings.regulations_path)
+
+    # Vector indexing: only meaningful for text-based files. We don't try to
+    # decode PDF/video here — those still serve as downloadable attachments
+    # via the existing static mount.
+    vector_count = 0
+    if safe_name.lower().endswith((".md", ".markdown", ".txt")):
+        try:
+            text = content.decode("utf-8", errors="replace")
+        except Exception:
+            text = ""
+        if text:
+            # First lines double as a title fallback.
+            first_line = next((ln for ln in text.splitlines() if ln.strip()), "")
+            record.title = first_line.lstrip("# ").strip()[:200] or safe_name
+            vector_count = await vector_store.index_file(
+                file_id=record.id,
+                filename=safe_name,
+                text=text,
+                direction=direction_clean,
+            )
+    record.vector_count = vector_count
 
     await log_activity(
         db,
         user_id=user.id,
         kind="admin_regulation_uploaded",
         title=f"Загружен файл: {safe_name}",
-        detail=f"chunks теперь: {loaded}",
+        detail=f"direction={direction_clean or '—'} · vectors={vector_count} · bm25={bm25_chunks}",
     )
     await db.commit()
-    return {"filename": safe_name, "size_bytes": len(content), "rag_chunks": loaded}
+    return {
+        "filename": safe_name,
+        "direction": direction_clean,
+        "size_bytes": len(content),
+        "rag_chunks": bm25_chunks,
+        "vector_count": vector_count,
+    }
+
+
+class RegulationPatch(BaseModel):
+    direction: str = ""
+
+
+@router.patch("/regulations/{filename}")
+async def admin_patch_regulation(
+    filename: str,
+    payload: RegulationPatch,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Re-classify a file's direction. Re-embeds the chunks so the new
+    direction is reflected in Qdrant payloads (and search-time filters)."""
+    safe_name = re.sub(r"[^A-Za-z0-9._\-]", "_", filename)
+    record = await db.scalar(select(KnowledgeFile).where(KnowledgeFile.filename == safe_name))
+    if not record:
+        raise HTTPException(404, "Файл не найден")
+    new_direction = (payload.direction or "").strip()[:128]
+    record.direction = new_direction
+
+    # Re-index in Qdrant so the new direction lands on existing chunks.
+    if safe_name.lower().endswith((".md", ".markdown", ".txt")):
+        target = settings.regulations_path / safe_name
+        if target.exists():
+            try:
+                text = target.read_text(encoding="utf-8", errors="replace")
+                record.vector_count = await vector_store.index_file(
+                    file_id=record.id,
+                    filename=safe_name,
+                    text=text,
+                    direction=new_direction,
+                )
+            except Exception:
+                pass
+
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="admin_regulation_updated",
+        title=f"Направление изменено: {safe_name}",
+        detail=f"direction={new_direction or '—'}",
+    )
+    await db.commit()
+    return {"filename": safe_name, "direction": new_direction, "vector_count": record.vector_count}
 
 
 @router.delete("/regulations/{filename}")
@@ -461,9 +612,14 @@ async def admin_delete_regulation(
 ):
     safe_name = re.sub(r"[^A-Za-z0-9._\-]", "_", filename)
     target = settings.regulations_path / safe_name
-    if not target.exists() or not target.is_file():
+    record = await db.scalar(select(KnowledgeFile).where(KnowledgeFile.filename == safe_name))
+    if not target.exists() and not record:
         raise HTTPException(404, "Файл не найден")
-    target.unlink()
+    if target.exists():
+        target.unlink()
+    if record:
+        await vector_store.forget_file(record.id)
+        await db.delete(record)
     loaded = rag_index.load_dir(settings.regulations_path)
     await log_activity(
         db,

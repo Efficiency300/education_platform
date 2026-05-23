@@ -438,6 +438,10 @@ export interface AdminRegulation {
   filename: string;
   size_bytes: number;
   modified_at: string;
+  direction?: string;
+  title?: string;
+  vector_count?: number;
+  content_type?: string;
 }
 
 export interface AdminUser {
@@ -570,10 +574,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  adminRegulations: () => request<AdminRegulation[]>("/admin/regulations"),
-  adminUploadRegulation: async (file: File) => {
+  adminRegulations: (direction?: string) =>
+    request<AdminRegulation[]>(
+      `/admin/regulations${direction ? `?direction=${encodeURIComponent(direction)}` : ""}`,
+    ),
+  adminRegulationDirections: () =>
+    request<{ directions: string[] }>("/admin/regulations/directions"),
+  adminUploadRegulation: async (file: File, direction: string = "") => {
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("direction", direction);
     const res = await fetch(`${BASE}/admin/regulations/upload`, {
       method: "POST",
       headers: { ...authHeaders() },
@@ -583,8 +593,18 @@ export const api = {
       const t = await res.text();
       throw new ApiError(res.status, `${res.status}`, t);
     }
-    return res.json() as Promise<{ filename: string; rag_chunks: number }>;
+    return res.json() as Promise<{
+      filename: string;
+      direction: string;
+      rag_chunks: number;
+      vector_count: number;
+    }>;
   },
+  adminPatchRegulationDirection: (filename: string, direction: string) =>
+    request<{ filename: string; direction: string; vector_count: number }>(
+      `/admin/regulations/${encodeURIComponent(filename)}`,
+      { method: "PATCH", body: JSON.stringify({ direction }) },
+    ),
   adminDeleteRegulation: (filename: string) =>
     request<{ deleted: boolean; rag_chunks: number }>(
       `/admin/regulations/${encodeURIComponent(filename)}`,

@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     regulations_dir: str = "./data/regulations"
     uploads_dir: str = "./data/uploads"
 
+    # Qdrant — vector knowledge base. ``qdrant_url`` empty disables vector
+    # search and the platform falls back to BM25 on the local markdown files.
+    qdrant_url: str = ""
+    qdrant_api_key: str = ""
+    qdrant_collection: str = "kompas_knowledge"
+    # Gemini embedding model. text-embedding-004 is 768-dimensional, cheap,
+    # and works with the existing GEMINI_API_KEY.
+    gemini_embedding_model: str = "text-embedding-004"
+    embedding_dim: int = 768
+
     jwt_secret: str = "dev-secret-change-me-in-prod"
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 24 * 7

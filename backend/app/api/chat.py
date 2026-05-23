@@ -28,8 +28,11 @@ async def ask(payload: ChatRequest, db: AsyncSession = Depends(get_session)):
     started = time.perf_counter()
     # Route through the LangGraph-backed agent so Gemini drives the answer and
     # the AI assistant + North share the same reasoning path. The agent runs
-    # RAG itself and returns the citations it actually used.
-    answer_text, hits = await agent_answer(payload.message, top_k=4)
+    # RAG itself and returns the citations it actually used. We pass the
+    # user's department/job_title as the *direction* so Qdrant scopes the
+    # search — admin-classified files only land for the right team.
+    direction = (user.job_title or user.department or "").strip() or None
+    answer_text, hits = await agent_answer(payload.message, top_k=4, direction=direction)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     log.info("chat ask user=%s ms=%s hits=%s", user.id, elapsed_ms, len(hits))
 

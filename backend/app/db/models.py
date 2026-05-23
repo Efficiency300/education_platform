@@ -315,3 +315,33 @@ class UserScenarioProgress(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+# ---------------------------------------------------------------------------
+# Knowledge base files (Qdrant-backed). One row per uploaded file; the chunk
+# vectors live in Qdrant keyed by ``id`` so we can delete them on file
+# removal without scanning the collection.
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeFile(Base):
+    __tablename__ = "knowledge_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    filename: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    # Free-form direction / department this file belongs to ("Backend", "HR"…).
+    # Empty string means "general / unclassified".
+    direction: Mapped[str] = mapped_column(String(128), default="", index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    content_type: Mapped[str] = mapped_column(String(128), default="")
+    # How many chunks we successfully upserted into Qdrant. Useful for the UI
+    # to badge "indexed / partial / not indexed".
+    vector_count: Mapped[int] = mapped_column(Integer, default=0)
+    uploaded_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
