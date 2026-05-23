@@ -82,9 +82,17 @@ export interface AnswerResponse {
 export interface ProgressModule {
   id: number;
   module: string;
+  kind: "simulator" | "course";
   completion_pct: number;
   points: number;
   updated_at: string;
+}
+
+export interface ProgressBreakdown {
+  simulator_done: number;
+  simulator_total: number;
+  courses_done: number;
+  courses_total: number;
 }
 
 export interface ProgressSummary {
@@ -92,6 +100,7 @@ export interface ProgressSummary {
   full_name: string;
   total_points: number;
   overall_completion_pct: number;
+  breakdown: ProgressBreakdown;
   modules: ProgressModule[];
 }
 
@@ -123,6 +132,80 @@ export interface HealthInfo {
   ispring_mode: "live" | "mock";
   rag_chunks: number;
   version: string;
+}
+
+export interface CourseSummary {
+  slug: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  icon: string;
+  difficulty: "easy" | "medium" | "hard";
+  estimated_minutes: number;
+  target_scenario_id: string;
+  tags: string[];
+  lessons_count: number;
+  quiz_count: number;
+  lessons_completed: number;
+  completed: boolean;
+  quiz_score: number;
+  quiz_max: number;
+}
+
+export interface CourseLesson {
+  slug: string;
+  title: string;
+  summary: string;
+  duration_min: number;
+  body_md: string;
+  completed: boolean;
+}
+
+export interface CourseQuizQuestion {
+  id: string;
+  question: string;
+  options: { id: string; text: string }[];
+}
+
+export interface CourseDetail extends Omit<CourseSummary, "lessons_completed" | "lessons_count" | "quiz_count"> {
+  lessons: CourseLesson[];
+  quiz: CourseQuizQuestion[];
+  quiz_attempts: number;
+}
+
+export interface LessonCompleteResponse {
+  course_slug: string;
+  lesson_slug: string;
+  completed_count: number;
+  total_count: number;
+  points_awarded: number;
+}
+
+export interface QuizQuestionResult {
+  question_id: string;
+  correct: boolean;
+  expected_option_id: string | null;
+  explanation: string;
+}
+
+export interface QuizSubmitResponse {
+  course_slug: string;
+  score: number;
+  max_score: number;
+  passed: boolean;
+  course_completed: boolean;
+  points_awarded: number;
+  next_scenario_id: string;
+  results: QuizQuestionResult[];
+}
+
+export interface ActivityItem {
+  id: number;
+  kind: string;
+  title: string;
+  detail: string;
+  points: number;
+  created_at: string;
 }
 
 export const api = {
@@ -157,6 +240,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ user_id }),
     }),
+  courses: (user_id?: number) =>
+    request<CourseSummary[]>(
+      `/courses${user_id ? `?user_id=${user_id}` : ""}`,
+    ),
+  course: (slug: string, user_id?: number) =>
+    request<CourseDetail>(
+      `/courses/${slug}${user_id ? `?user_id=${user_id}` : ""}`,
+    ),
+  completeLesson: (user_id: number, course_slug: string, lesson_slug: string) =>
+    request<LessonCompleteResponse>("/courses/lessons/complete", {
+      method: "POST",
+      body: JSON.stringify({ user_id, course_slug, lesson_slug }),
+    }),
+  submitQuiz: (user_id: number, course_slug: string, answers: Record<string, string>) =>
+    request<QuizSubmitResponse>("/courses/quiz/submit", {
+      method: "POST",
+      body: JSON.stringify({ user_id, course_slug, answers }),
+    }),
+  activity: (user_id: number, limit = 20) =>
+    request<ActivityItem[]>(`/activity/${user_id}?limit=${limit}`),
 };
 
 /** Стрим SSE-чата. Возвращает функцию отмены. */

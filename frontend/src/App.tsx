@@ -1,25 +1,21 @@
-import { useEffect, useState } from "react";
 import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { api, User, HealthInfo } from "./api";
 import Sidebar from "./components/Sidebar";
 import MobileNav from "./components/MobileNav";
+import Toaster from "./components/Toaster";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Simulator from "./pages/Simulator";
 import ProgressPage from "./pages/Progress";
+import CoursesPage from "./pages/Courses";
+import CourseDetailPage from "./pages/CourseDetail";
+import { useProgress } from "./state/ProgressContext";
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [health, setHealth] = useState<HealthInfo | null>(null);
+  const { user, loading } = useProgress();
   const location = useLocation();
 
-  useEffect(() => {
-    api.listUsers().then((users) => setUser(users[0] ?? null)).catch(console.error);
-    api.health().then(setHealth).catch(console.error);
-  }, []);
-
-  if (!user) {
+  if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <motion.div
@@ -36,7 +32,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen w-full">
-      <Sidebar user={user} health={health} />
+      <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />
         <main className="flex-1 px-4 pb-28 pt-6 md:px-10 md:pb-12 md:pt-10">
@@ -50,15 +46,19 @@ export default function App() {
               className="mx-auto w-full max-w-6xl"
             >
               <Routes location={location}>
-                <Route path="/" element={<Dashboard user={user} />} />
-                <Route path="/chat" element={<Chat user={user} />} />
-                <Route path="/simulator" element={<Simulator user={user} />} />
-                <Route path="/progress" element={<ProgressPage user={user} />} />
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/courses" element={<CoursesPage />} />
+                <Route path="/courses/:slug" element={<CourseDetailPage />} />
+                <Route path="/simulator" element={<Simulator />} />
+                <Route path="/simulator/:scenarioId" element={<Simulator />} />
+                <Route path="/progress" element={<ProgressPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </motion.div>
           </AnimatePresence>
         </main>
+        <Toaster />
       </div>
     </div>
   );

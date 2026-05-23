@@ -8,19 +8,24 @@ import {
   Moon,
   Sun,
   Sparkles,
+  BookOpen,
+  ShieldCheck,
 } from "lucide-react";
 import { useTheme } from "../theme";
-import { HealthInfo, User } from "../api";
+import { useProgress } from "../state/ProgressContext";
 
 const NAV = [
   { to: "/", label: "Главная", icon: LayoutDashboard, end: true },
-  { to: "/chat", label: "AI-ассистент", icon: MessagesSquare },
+  { to: "/courses", label: "Курсы", icon: BookOpen },
   { to: "/simulator", label: "Симулятор", icon: Gamepad2 },
+  { to: "/chat", label: "AI-ассистент", icon: MessagesSquare },
   { to: "/progress", label: "Прогресс", icon: TrendingUp },
 ];
 
-export default function Sidebar({ user, health }: { user: User; health: HealthInfo | null }) {
+export default function Sidebar() {
   const { theme, toggle } = useTheme();
+  const { user, health, gamification } = useProgress();
+  if (!user) return null;
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 border-r border-navy-900/8 bg-white/40 px-4 py-6 backdrop-blur-2xl dark:border-white/8 dark:bg-navy-900/40 md:flex">
       <div className="px-2 pb-6">
@@ -69,6 +74,24 @@ export default function Sidebar({ user, health }: { user: User; health: HealthIn
       </nav>
 
       <div className="mt-auto flex flex-col gap-3">
+        {gamification && (
+          <div className="rounded-2xl border border-gold-500/25 bg-gradient-to-br from-gold-500/10 to-transparent px-3 py-2.5">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-navy-900/60 dark:text-white/60">
+              <span>Уровень {gamification.level.level}</span>
+              <span>{gamification.level.xp} XP</span>
+            </div>
+            <div className="mt-1 font-display text-sm font-semibold">
+              {gamification.level.title}
+            </div>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-navy-900/8 dark:bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-600 transition-all"
+                style={{ width: `${gamification.level.progress_pct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <button
           onClick={toggle}
           className="flex items-center gap-2.5 rounded-xl border border-navy-900/8 bg-white/50 px-3 py-2 text-xs font-medium text-navy-900/70 transition hover:bg-white/80 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
@@ -96,7 +119,7 @@ export default function Sidebar({ user, health }: { user: User; health: HealthIn
                 LLM {health.llm_mode}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-navy-900/5 px-2 py-0.5 text-[9px] uppercase tracking-wider text-navy-900/60 dark:bg-white/10 dark:text-white/60">
-                RAG {health.rag_chunks}
+                <ShieldCheck size={9} /> RAG {health.rag_chunks}
               </span>
             </div>
           )}

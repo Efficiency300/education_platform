@@ -8,9 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
+from sqlalchemy import func
+
 from app.db.session import get_session
-from app.db.models import Progress, User, ChatMessage, SimulatorSession
+from app.db.models import Progress, User, ChatMessage, SimulatorSession, CourseProgress
 from app.simulator.scenarios import SCENARIOS
+from app.courses.catalog import COURSES
 
 router = APIRouter(prefix="/badges", tags=["badges"])
 
@@ -45,6 +48,12 @@ BADGE_DEFS = [
         "title": "Эрудит",
         "description": "Набрали более 200 баллов",
         "icon": "graduation-cap",
+    },
+    {
+        "id": "course_master",
+        "title": "Магистр курсов",
+        "description": "Завершили все обучающие курсы",
+        "icon": "book-open",
     },
 ]
 
@@ -102,21 +111,10 @@ async def get_gamification(user_id: int, db: AsyncSession = Depends(get_session)
     total_xp = sum(p.points for p in progress_rows)
 
     chat_count = await db.scalar(
-        select(ChatMessage.id).where(
+        select(func.count(ChatMessage.id)).where(
             ChatMessage.user_id == user_id, ChatMessage.role == "user"
         )
-    )
-    chat_count = (
-        len(
-            (
-                await db.scalars(
-                    select(ChatMessage.id).where(
-                        ChatMessage.user_id == user_id, ChatMessage.role == "user"
-                    )
-                )
-            ).all()
-        )
-    )
+    ) or 0
 
     finished_sessions = (
         await db.scalars(
@@ -132,12 +130,23 @@ async def get_gamification(user_id: int, db: AsyncSession = Depends(get_session)
     )
     finished_scenario_ids = {s.scenario_id for s in finished_sessions if s.finished}
 
+    completed_courses = (
+        await db.scalars(
+            select(CourseProgress).where(
+                CourseProgress.user_id == user_id,
+                CourseProgress.completed_at.is_not(None),
+            )
+        )
+    ).all()
+    completed_course_slugs = {c.course_slug for c in completed_courses}
+
     earned = {
         "first_steps": len(finished_sessions) >= 1,
         "ai_curious": chat_count >= 5,
         "perfectionist": has_perfect,
         "marathoner": finished_scenario_ids >= set(SCENARIOS.keys()),
         "scholar": total_xp >= 200,
+        "course_master": completed_course_slugs >= set(COURSES.keys()),
     }
 
     badges = [BadgeOut(**b, earned=earned.get(b["id"], False)) for b in BADGE_DEFS]

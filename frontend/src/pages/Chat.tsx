@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, FileText, ChevronDown, Bot, User as UserIcon } from "lucide-react";
-import { api, User, Source, streamChat } from "../api";
+import { api, Source, streamChat } from "../api";
+import { useProgress } from "../state/ProgressContext";
 
 interface Msg {
   role: "user" | "assistant";
@@ -17,7 +18,8 @@ const SUGGESTIONS = [
   { label: "Отпуск стажёра", q: "Сколько дней отпуска у стажёра?" },
 ];
 
-export default function Chat({ user }: { user: User }) {
+export default function Chat() {
+  const { user, refresh } = useProgress();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,16 +27,18 @@ export default function Chat({ user }: { user: User }) {
   const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    if (!user) return;
     api.history(user.id)
       .then((h) => setMessages(h.map((m) => ({ role: m.role, content: m.content }))))
       .catch(console.error);
-  }, [user.id]);
+  }, [user?.id]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   const send = (text?: string) => {
+    if (!user) return;
     const q = (text ?? input).trim();
     if (!q || busy) return;
     setInput("");
@@ -68,6 +72,7 @@ export default function Chat({ user }: { user: User }) {
           return copy;
         });
         setBusy(false);
+        refresh();
       },
       onError: (msg) => {
         setMessages((m) => {

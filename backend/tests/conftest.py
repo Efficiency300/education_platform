@@ -22,11 +22,13 @@ async def client():
 
 
 @pytest_asyncio.fixture
-async def user_id(client):
+async def user_id(client, request):
+    # уникальный пользователь на каждый тест — чтобы не текли XP/прогресс между тестами
+    eid = f"TEST-{abs(hash(request.node.nodeid)) % 10_000_000:07d}"
     res = await client.post(
         "/api/users",
         json={
-            "employee_id": "TEST-001",
+            "employee_id": eid,
             "full_name": "Test User",
             "role": "intern",
             "department": "QA",

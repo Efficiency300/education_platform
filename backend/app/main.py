@@ -10,7 +10,7 @@ from app.core.logging import setup_logging
 from app.db.session import init_db, SessionLocal
 from app.db.models import User
 from app.ai.rag import rag_index
-from app.api import users, chat, simulator, progress, ispring, badges, hr_import
+from app.api import users, chat, simulator, progress, ispring, badges, hr_import, courses, activity
 
 setup_logging()
 log = logging.getLogger("app")
@@ -78,5 +78,7 @@ for router in (
     ispring.router,
     badges.router,
     hr_import.router,
+    courses.router,
+    activity.router,
 ):
     app.include_router(router, prefix="/api")

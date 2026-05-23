@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session, SessionLocal
 from app.db.models import ChatMessage, User
+from app.db.activity import log_activity
 from app.schemas.chat import ChatRequest, ChatResponse, Source, ChatMessageOut
 from app.ai.rag import rag_index
 from app.ai.llm import generate_answer, stream_answer
@@ -44,6 +45,13 @@ async def ask(payload: ChatRequest, db: AsyncSession = Depends(get_session)):
                 sources=[s.model_dump() for s in sources],
             ),
         ]
+    )
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="chat_asked",
+        title="Вопрос AI-наставнику",
+        detail=payload.message[:140],
     )
     await db.commit()
 
@@ -99,6 +107,13 @@ async def ask_stream(payload: ChatRequest):
                         sources=sources,
                     ),
                 ]
+            )
+            await log_activity(
+                db,
+                user_id=payload.user_id,
+                kind="chat_asked",
+                title="Вопрос AI-наставнику",
+                detail=payload.message[:140],
             )
             await db.commit()
 

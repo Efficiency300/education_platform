@@ -1,11 +1,17 @@
+"""Сводный прогресс пользователя.
+
+Аггрегирует и сценарии симулятора, и обучающие курсы.
+Возвращает разбивку по типу + общий процент прохождения.
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.db.models import Progress, User
-from app.schemas.progress import ProgressSummary, ProgressOut
+from app.schemas.progress import ProgressSummary, ProgressOut, ProgressBreakdown
 from app.simulator.scenarios import SCENARIOS
+from app.courses.catalog import COURSES
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 
@@ -21,14 +27,26 @@ async def get_progress(user_id: int, db: AsyncSession = Depends(get_session)):
             select(Progress).where(Progress.user_id == user_id).order_by(Progress.module)
         )
     ).all()
-    total_modules = max(len(SCENARIOS), 1)
-    overall = sum(r.completion_pct for r in rows) / total_modules
+
+    total_units = max(len(SCENARIOS) + len(COURSES), 1)
+    overall = sum(r.completion_pct for r in rows) / total_units
     total_points = sum(r.points for r in rows)
+
+    sim_rows = [r for r in rows if r.kind == "simulator" or not r.module.startswith("course:")]
+    crs_rows = [r for r in rows if r.kind == "course" or r.module.startswith("course:")]
+
+    breakdown = ProgressBreakdown(
+        simulator_done=len([r for r in sim_rows if r.completion_pct > 0]),
+        simulator_total=len(SCENARIOS),
+        courses_done=len([r for r in crs_rows if r.completion_pct >= 100.0]),
+        courses_total=len(COURSES),
+    )
 
     return ProgressSummary(
         user_id=user.id,
         full_name=user.full_name,
         total_points=total_points,
         overall_completion_pct=round(overall, 1),
+        breakdown=breakdown,
         modules=[ProgressOut.model_validate(r) for r in rows],
     )

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck,
@@ -15,8 +16,16 @@ import {
   Shield,
   BookOpen,
   Clock,
+  GraduationCap,
 } from "lucide-react";
-import { api, User, Scenario, SimSession, ScenarioStep, AnswerResponse, ScenarioSummary } from "../api";
+import {
+  api,
+  Scenario,
+  SimSession,
+  ScenarioStep,
+  AnswerResponse,
+} from "../api";
+import { useProgress } from "../state/ProgressContext";
 
 const ICON_MAP: Record<string, any> = {
   wallet: Wallet,
@@ -30,31 +39,39 @@ const DIFF_LABEL: Record<string, { label: string; cls: string }> = {
   hard: { label: "Сложный", cls: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
 };
 
-export default function Simulator({ user }: { user: User }) {
-  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+export default function Simulator() {
+  const { user, scenarios, courses, progress, refresh, notify } = useProgress();
+  const { scenarioId } = useParams();
+  const navigate = useNavigate();
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [session, setSession] = useState<SimSession | null>(null);
   const [currentStep, setCurrentStep] = useState<ScenarioStep | null>(null);
   const [lastResult, setLastResult] = useState<(AnswerResponse & { optionId: string }) | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    api.scenarios().then(setScenarios).catch(console.error);
-  }, []);
+  const start = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      setBusy(true);
+      try {
+        const sc = await api.scenario(id);
+        const sess = await api.startSession(user.id, id);
+        setScenario(sc);
+        setSession(sess);
+        setCurrentStep(sc.steps[0]);
+        setLastResult(null);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [user],
+  );
 
-  const start = async (scenarioId: string) => {
-    setBusy(true);
-    try {
-      const sc = await api.scenario(scenarioId);
-      const sess = await api.startSession(user.id, scenarioId);
-      setScenario(sc);
-      setSession(sess);
-      setCurrentStep(sc.steps[0]);
-      setLastResult(null);
-    } finally {
-      setBusy(false);
+  useEffect(() => {
+    if (scenarioId && (!scenario || scenario.id !== scenarioId)) {
+      start(scenarioId);
     }
-  };
+  }, [scenarioId, scenario, start]);
 
   const answer = async (optionId: string) => {
     if (!session || !currentStep) return;
@@ -63,6 +80,10 @@ export default function Simulator({ user }: { user: User }) {
       const res = await api.answer(session.id, currentStep.id, optionId);
       setLastResult({ ...res, optionId });
       setSession((s) => (s ? { ...s, score: res.total_score, finished: res.finished } : s));
+      if (res.finished) {
+        await refresh();
+        notify("ok", `Сценарий завершён · ${res.total_score} XP`);
+      }
     } finally {
       setBusy(false);
     }
@@ -81,10 +102,20 @@ export default function Simulator({ user }: { user: User }) {
     setSession(null);
     setCurrentStep(null);
     setLastResult(null);
+    if (scenarioId) navigate("/simulator", { replace: true });
   };
 
   // ---------- ВЫБОР СЦЕНАРИЯ ----------
   if (!scenario) {
+    const progressByScenario = Object.fromEntries(
+      (progress?.modules ?? [])
+        .filter((m) => m.kind !== "course" && !m.module.startsWith("course:"))
+        .map((m) => [m.module, m]),
+    );
+    const courseByScenario = Object.fromEntries(
+      courses.map((c) => [c.target_scenario_id, c]),
+    );
+
     return (
       <div className="flex flex-col gap-8">
         <div>
@@ -92,8 +123,9 @@ export default function Simulator({ user }: { user: User }) {
             <ShieldCheck size={14} className="text-emerald-500" /> Safe sandbox · dummy data
           </div>
           <h1 className="hero-text mt-2">Симулятор рабочего места</h1>
-          <p className="mt-3 max-w-xl text-base text-navy-900/60 dark:text-white/60">
+          <p className="mt-3 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
             Изолированная среда. Никакого соединения с реальной АБС или клиентской базой.
+            Рекомендуется проходить после соответствующего курса.
           </p>
         </div>
 
@@ -101,6 +133,9 @@ export default function Simulator({ user }: { user: User }) {
           {scenarios.map((s, i) => {
             const Icon = ICON_MAP[s.icon] ?? BookOpen;
             const diff = DIFF_LABEL[s.difficulty] ?? DIFF_LABEL.easy;
+            const done = progressByScenario[s.id];
+            const course = courseByScenario[s.id];
+            const courseReady = course?.completed ?? true;
             return (
               <motion.button
                 key={s.id}
@@ -127,13 +162,25 @@ export default function Simulator({ user }: { user: User }) {
                     {s.description}
                   </p>
                 </div>
+                {course && !courseReady && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
+                    <GraduationCap size={11} className="mr-1 inline" />
+                    Рекомендуется сначала пройти курс «{course.title}»
+                  </div>
+                )}
                 <div className="flex items-center justify-between border-t border-navy-900/8 pt-4 dark:border-white/8">
                   <div className="flex items-center gap-1.5 text-xs text-navy-900/50 dark:text-white/50">
                     <Clock size={12} /> {s.estimated_minutes} мин
                   </div>
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-navy-900 transition-all group-hover:gap-2 dark:text-white">
-                    Начать <ArrowRight size={12} />
-                  </span>
+                  {done ? (
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      ✓ Лучший: {Math.round(done.completion_pct)}%
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-navy-900 transition-all group-hover:gap-2 dark:text-white">
+                      Начать <ArrowRight size={12} />
+                    </span>
+                  )}
                 </div>
               </motion.button>
             );
@@ -147,10 +194,11 @@ export default function Simulator({ user }: { user: User }) {
   if (session?.finished && !lastResult) {
     const maxPossible = scenario.steps.reduce(
       (acc, st) => acc + Math.max(...st.options.map((o) => o.points)),
-      0
+      0,
     );
     const pct = Math.round((session.score / maxPossible) * 100);
-    const grade = pct >= 90 ? "Отлично!" : pct >= 70 ? "Хорошо" : pct >= 50 ? "Удовлетворительно" : "Нужно повторить";
+    const grade =
+      pct >= 90 ? "Отлично!" : pct >= 70 ? "Хорошо" : pct >= 50 ? "Удовлетворительно" : "Нужно повторить";
     return (
       <div className="flex flex-col items-center gap-8 py-8">
         <motion.div
@@ -162,7 +210,9 @@ export default function Simulator({ user }: { user: User }) {
           <Trophy size={42} strokeWidth={2.2} />
         </motion.div>
         <div className="text-center">
-          <div className="text-sm uppercase tracking-widest text-navy-900/50 dark:text-white/50">{grade}</div>
+          <div className="text-sm uppercase tracking-widest text-navy-900/50 dark:text-white/50">
+            {grade}
+          </div>
           <h1 className="hero-text mt-2">Сценарий завершён</h1>
           <p className="mt-2 text-navy-900/60 dark:text-white/60">{scenario.title}</p>
         </div>
@@ -178,7 +228,7 @@ export default function Simulator({ user }: { user: User }) {
           <div className="text-sm text-navy-900/60 dark:text-white/60">
             {session.score} из {maxPossible} баллов
           </div>
-          <div className="mt-4 flex gap-3">
+          <div className="mt-4 flex flex-wrap justify-center gap-3">
             <button onClick={restart} className="btn-ghost">
               <ChevronLeft size={14} /> Другой сценарий
             </button>
@@ -229,7 +279,6 @@ export default function Simulator({ user }: { user: User }) {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
-        {/* Левая колонка — выбор */}
         <div className="flex flex-col gap-5">
           <motion.div
             key={currentStep.id}
@@ -305,10 +354,14 @@ export default function Simulator({ user }: { user: User }) {
                     <div className="font-semibold">
                       {lastResult.correct ? "Верно!" : "Не совсем"}
                       {lastResult.points_awarded > 0 && (
-                        <span className="ml-2 text-gold-600 dark:text-gold-400">+{lastResult.points_awarded} XP</span>
+                        <span className="ml-2 text-gold-600 dark:text-gold-400">
+                          +{lastResult.points_awarded} XP
+                        </span>
                       )}
                     </div>
-                    <div className="mt-1 leading-relaxed text-navy-900/80 dark:text-white/80">{lastResult.feedback}</div>
+                    <div className="mt-1 leading-relaxed text-navy-900/80 dark:text-white/80">
+                      {lastResult.feedback}
+                    </div>
                   </div>
                   <button
                     onClick={lastResult.next_step_id ? next : () => setLastResult(null)}
@@ -322,7 +375,6 @@ export default function Simulator({ user }: { user: User }) {
           </motion.div>
         </div>
 
-        {/* Правая колонка — sandbox-frame с виртуальным АБС */}
         <div className="flex flex-col gap-5">
           <SandboxFrame scenario={scenario} stepId={currentStep.id} />
         </div>
@@ -339,7 +391,6 @@ function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string
       transition={{ type: "spring", stiffness: 200 }}
       className="overflow-hidden rounded-3xl border border-gold-500/30 bg-gradient-to-b from-gold-50/40 to-transparent p-1 shadow-glass-lg dark:from-gold-500/10"
     >
-      {/* Sandbox label */}
       <div className="flex items-center justify-between px-4 py-2 text-[10px] uppercase tracking-widest text-gold-700 dark:text-gold-400">
         <span className="inline-flex items-center gap-1.5">
           <Lock size={11} /> Safe Sandbox
@@ -347,7 +398,6 @@ function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string
         <span>Dummy data</span>
       </div>
 
-      {/* «Окно АБС» в стиле macOS */}
       <div className="overflow-hidden rounded-2xl border border-navy-900/15 bg-[#0F1B2E] text-slate-200 shadow-2xl">
         <div className="flex items-center gap-2 border-b border-white/8 bg-[#0A1628] px-4 py-2.5">
           <div className="flex gap-1.5">

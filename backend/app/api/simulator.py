@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.db.models import SimulatorSession, User, Progress
+from app.db.activity import log_activity
 from app.schemas.simulator import (
     StartSessionRequest,
     AnswerRequest,
@@ -51,6 +52,14 @@ async def start_session(payload: StartSessionRequest, db: AsyncSession = Depends
         score=0,
     )
     db.add(session)
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="scenario_started",
+        title=f"Запущен сценарий: {scenario['title']}",
+        detail=scenario.get("description", ""),
+        payload={"scenario_id": scenario["id"]},
+    )
     await db.commit()
     await db.refresh(session)
     return session
@@ -111,6 +120,7 @@ async def answer(payload: AnswerRequest, db: AsyncSession = Depends(get_session)
             progress = Progress(
                 user_id=session.user_id,
                 module=session.scenario_id,
+                kind="simulator",
                 completion_pct=pct,
                 points=session.score,
             )
@@ -118,6 +128,22 @@ async def answer(payload: AnswerRequest, db: AsyncSession = Depends(get_session)
         else:
             progress.completion_pct = max(progress.completion_pct, pct)
             progress.points = max(progress.points, session.score)
+            progress.kind = "simulator"
+
+        await log_activity(
+            db,
+            user_id=session.user_id,
+            kind="scenario_completed",
+            title=f"Сценарий пройден: {scenario['title']}",
+            detail=f"{session.score} из {total_max} баллов ({round(pct)}%)",
+            points=session.score,
+            payload={
+                "scenario_id": scenario["id"],
+                "score": session.score,
+                "max": total_max,
+                "pct": round(pct, 1),
+            },
+        )
 
     await db.commit()
     await db.refresh(session)

@@ -42,7 +42,7 @@ async def test_ispring_mock(client, user_id):
     assert res.status_code == 200
     body = res.json()
     assert body["mode"] == "mock"
-    assert body["sent"]["employee_id"] == "TEST-001"
+    assert body["sent"]["employee_id"].startswith("TEST-")
 
 
 @pytest.mark.asyncio

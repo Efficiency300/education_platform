@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Rocket, Sparkles, Trophy, Medal, GraduationCap, Award } from "lucide-react";
+import { Rocket, Sparkles, Trophy, Medal, GraduationCap, Award, BookOpen } from "lucide-react";
 import { Badge } from "../api";
 
 const ICONS: Record<string, any> = {
@@ -8,6 +8,7 @@ const ICONS: Record<string, any> = {
   trophy: Trophy,
   medal: Medal,
   "graduation-cap": GraduationCap,
+  "book-open": BookOpen,
 };
 
 export default function BadgeGrid({ badges }: { badges: Badge[] }) {

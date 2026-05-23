@@ -1,0 +1,384 @@
+"""REST API курсов.
+
+Курс = последовательность markdown-уроков + финальный квиз.
+По завершении квиза (≥ pass_threshold) курс считается пройденным,
+начисляется XP и пишется запись в Progress (kind='course').
+"""
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_session
+from app.db.models import (
+    User,
+    Progress,
+    CourseProgress,
+    LessonProgress,
+)
+from app.db.activity import log_activity
+from app.courses.catalog import (
+    list_courses,
+    get_course,
+    get_lesson,
+    course_xp_reward,
+)
+from app.schemas.courses import (
+    CourseSummary,
+    CourseDetail,
+    LessonOut,
+    QuizQuestion,
+    QuizOption,
+    LessonCompleteRequest,
+    LessonCompleteResponse,
+    QuizSubmitRequest,
+    QuizSubmitResponse,
+    QuizQuestionResult,
+)
+
+router = APIRouter(prefix="/courses", tags=["courses"])
+
+PASS_THRESHOLD_PCT = 70.0
+LESSON_POINTS = 10
+
+
+@router.get("", response_model=list[CourseSummary])
+async def courses_index(user_id: int | None = None, db: AsyncSession = Depends(get_session)):
+    items = list_courses()
+    if not user_id:
+        return [CourseSummary(**c) for c in items]
+
+    course_rows = (
+        await db.scalars(select(CourseProgress).where(CourseProgress.user_id == user_id))
+    ).all()
+    by_slug = {c.course_slug: c for c in course_rows}
+
+    lesson_rows = (
+        await db.scalars(select(LessonProgress).where(LessonProgress.user_id == user_id))
+    ).all()
+    lesson_count_by_course: dict[str, int] = {}
+    for lp in lesson_rows:
+        lesson_count_by_course[lp.course_slug] = (
+            lesson_count_by_course.get(lp.course_slug, 0) + 1
+        )
+
+    out: list[CourseSummary] = []
+    for c in items:
+        cp = by_slug.get(c["slug"])
+        out.append(
+            CourseSummary(
+                **c,
+                lessons_completed=lesson_count_by_course.get(c["slug"], 0),
+                completed=bool(cp and cp.completed_at),
+                quiz_score=cp.quiz_score if cp else 0,
+                quiz_max=cp.quiz_max if cp else 0,
+            )
+        )
+    return out
+
+
+@router.get("/{course_slug}", response_model=CourseDetail)
+async def course_detail(
+    course_slug: str,
+    user_id: int | None = None,
+    db: AsyncSession = Depends(get_session),
+):
+    course = get_course(course_slug)
+    if not course:
+        raise HTTPException(404, "Course not found")
+
+    completed_lesson_slugs: set[str] = set()
+    cp: CourseProgress | None = None
+    if user_id:
+        lesson_rows = (
+            await db.scalars(
+                select(LessonProgress).where(
+                    LessonProgress.user_id == user_id,
+                    LessonProgress.course_slug == course_slug,
+                )
+            )
+        ).all()
+        completed_lesson_slugs = {lp.lesson_slug for lp in lesson_rows}
+        cp = await db.scalar(
+            select(CourseProgress).where(
+                CourseProgress.user_id == user_id,
+                CourseProgress.course_slug == course_slug,
+            )
+        )
+
+    return CourseDetail(
+        slug=course["slug"],
+        title=course["title"],
+        subtitle=course["subtitle"],
+        description=course["description"],
+        icon=course["icon"],
+        difficulty=course["difficulty"],
+        estimated_minutes=course["estimated_minutes"],
+        target_scenario_id=course["target_scenario_id"],
+        tags=course["tags"],
+        lessons=[
+            LessonOut(
+                slug=l["slug"],
+                title=l["title"],
+                summary=l["summary"],
+                duration_min=l["duration_min"],
+                body_md=l["body_md"],
+                completed=l["slug"] in completed_lesson_slugs,
+            )
+            for l in course["lessons"]
+        ],
+        quiz=[
+            QuizQuestion(
+                id=q["id"],
+                question=q["question"],
+                options=[QuizOption(id=o["id"], text=o["text"]) for o in q["options"]],
+            )
+            for q in course["quiz"]
+        ],
+        completed=bool(cp and cp.completed_at),
+        quiz_score=cp.quiz_score if cp else 0,
+        quiz_max=cp.quiz_max if cp else 0,
+        quiz_attempts=cp.quiz_attempts if cp else 0,
+    )
+
+
+@router.post("/lessons/complete", response_model=LessonCompleteResponse)
+async def complete_lesson(
+    payload: LessonCompleteRequest, db: AsyncSession = Depends(get_session)
+):
+    user = await db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    course = get_course(payload.course_slug)
+    if not course:
+        raise HTTPException(404, "Course not found")
+    lesson = get_lesson(course, payload.lesson_slug)
+    if not lesson:
+        raise HTTPException(404, "Lesson not found")
+
+    await _ensure_course_progress(db, payload.user_id, payload.course_slug)
+
+    existing = await db.scalar(
+        select(LessonProgress).where(
+            LessonProgress.user_id == payload.user_id,
+            LessonProgress.course_slug == payload.course_slug,
+            LessonProgress.lesson_slug == payload.lesson_slug,
+        )
+    )
+    points_awarded = 0
+    if not existing:
+        db.add(
+            LessonProgress(
+                user_id=payload.user_id,
+                course_slug=payload.course_slug,
+                lesson_slug=payload.lesson_slug,
+            )
+        )
+        points_awarded = LESSON_POINTS
+        await log_activity(
+            db,
+            user_id=payload.user_id,
+            kind="lesson_completed",
+            title=f"Урок пройден: {lesson['title']}",
+            detail=course["title"],
+            points=points_awarded,
+            payload={"course_slug": payload.course_slug, "lesson_slug": payload.lesson_slug},
+        )
+
+    done_rows = (
+        await db.scalars(
+            select(LessonProgress).where(
+                LessonProgress.user_id == payload.user_id,
+                LessonProgress.course_slug == payload.course_slug,
+            )
+        )
+    ).all()
+    done_count = len(done_rows)
+    total = len(course["lessons"])
+
+    pct = (done_count / total) * 80.0  # уроки = 80% курса, квиз = 20%
+    await _upsert_progress(
+        db,
+        user_id=payload.user_id,
+        module=f"course:{payload.course_slug}",
+        kind="course",
+        completion_pct=pct,
+        points_total=done_count * LESSON_POINTS,
+    )
+
+    await db.commit()
+
+    return LessonCompleteResponse(
+        course_slug=payload.course_slug,
+        lesson_slug=payload.lesson_slug,
+        completed_count=done_count,
+        total_count=total,
+        points_awarded=points_awarded,
+    )
+
+
+@router.post("/quiz/submit", response_model=QuizSubmitResponse)
+async def submit_quiz(
+    payload: QuizSubmitRequest, db: AsyncSession = Depends(get_session)
+):
+    user = await db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    course = get_course(payload.course_slug)
+    if not course:
+        raise HTTPException(404, "Course not found")
+
+    cp = await _ensure_course_progress(db, payload.user_id, payload.course_slug)
+    cp.quiz_attempts = (cp.quiz_attempts or 0) + 1
+
+    results: list[QuizQuestionResult] = []
+    score = 0
+    for q in course["quiz"]:
+        correct_option = next((o for o in q["options"] if o["correct"]), None)
+        chosen = payload.answers.get(q["id"])
+        is_correct = bool(correct_option and chosen == correct_option["id"])
+        if is_correct:
+            score += 1
+        results.append(
+            QuizQuestionResult(
+                question_id=q["id"],
+                correct=is_correct,
+                expected_option_id=correct_option["id"] if correct_option else None,
+                explanation=q.get("explanation", ""),
+            )
+        )
+    max_score = len(course["quiz"])
+    pct = (score / max_score * 100.0) if max_score else 0.0
+    passed = pct >= PASS_THRESHOLD_PCT
+    cp.quiz_score = max(cp.quiz_score or 0, score)
+    cp.quiz_max = max_score
+
+    points_awarded = 0
+    course_completed_now = False
+    if passed and not cp.completed_at:
+        cp.completed_at = datetime.utcnow()
+        course_completed_now = True
+        points_awarded = course_xp_reward(course)
+        await log_activity(
+            db,
+            user_id=payload.user_id,
+            kind="course_completed",
+            title=f"Курс пройден: {course['title']}",
+            detail=f"Квиз: {score}/{max_score}",
+            points=points_awarded,
+            payload={"course_slug": payload.course_slug},
+        )
+    elif passed:
+        await log_activity(
+            db,
+            user_id=payload.user_id,
+            kind="quiz_passed",
+            title=f"Квиз пересдан: {course['title']}",
+            detail=f"{score}/{max_score}",
+            points=0,
+        )
+    else:
+        await log_activity(
+            db,
+            user_id=payload.user_id,
+            kind="quiz_failed",
+            title=f"Квиз: {score}/{max_score} — нужен повтор",
+            detail=course["title"],
+            points=0,
+        )
+
+    # фиксация в общий Progress
+    done_rows = (
+        await db.scalars(
+            select(LessonProgress).where(
+                LessonProgress.user_id == payload.user_id,
+                LessonProgress.course_slug == payload.course_slug,
+            )
+        )
+    ).all()
+    lessons_pct = (len(done_rows) / max(len(course["lessons"]), 1)) * 80.0
+    quiz_pct = (pct / 100.0) * 20.0
+    total_pct = min(100.0, lessons_pct + quiz_pct)
+    await _upsert_progress(
+        db,
+        user_id=payload.user_id,
+        module=f"course:{payload.course_slug}",
+        kind="course",
+        completion_pct=total_pct,
+        points_total=len(done_rows) * LESSON_POINTS + (points_awarded if course_completed_now else 0),
+    )
+
+    await db.commit()
+
+    return QuizSubmitResponse(
+        course_slug=payload.course_slug,
+        score=score,
+        max_score=max_score,
+        passed=passed,
+        course_completed=course_completed_now,
+        points_awarded=points_awarded,
+        next_scenario_id=course["target_scenario_id"],
+        results=results,
+    )
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+
+async def _ensure_course_progress(
+    db: AsyncSession, user_id: int, course_slug: str
+) -> CourseProgress:
+    cp = await db.scalar(
+        select(CourseProgress).where(
+            CourseProgress.user_id == user_id,
+            CourseProgress.course_slug == course_slug,
+        )
+    )
+    if cp:
+        return cp
+    cp = CourseProgress(user_id=user_id, course_slug=course_slug)
+    db.add(cp)
+    await db.flush()
+    course = get_course(course_slug)
+    await log_activity(
+        db,
+        user_id=user_id,
+        kind="course_started",
+        title=f"Начат курс: {course['title']}" if course else "Курс начат",
+        detail=course["subtitle"] if course else "",
+        payload={"course_slug": course_slug},
+    )
+    return cp
+
+
+async def _upsert_progress(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    module: str,
+    kind: str,
+    completion_pct: float,
+    points_total: int,
+) -> None:
+    row = await db.scalar(
+        select(Progress).where(Progress.user_id == user_id, Progress.module == module)
+    )
+    if row:
+        row.completion_pct = max(row.completion_pct, completion_pct)
+        row.points = max(row.points, points_total)
+        row.kind = kind
+    else:
+        db.add(
+            Progress(
+                user_id=user_id,
+                module=module,
+                kind=kind,
+                completion_pct=completion_pct,
+                points=points_total,
+            )
+        )
+
+

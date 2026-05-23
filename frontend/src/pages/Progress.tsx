@@ -1,42 +1,47 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Send, CheckCircle2, AlertCircle, Sparkles, TrendingUp } from "lucide-react";
-import { api, User, ProgressSummary, Gamification, ScenarioSummary } from "../api";
+import {
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  TrendingUp,
+  BookOpen,
+  Gamepad2,
+  Activity as ActivityIcon,
+} from "lucide-react";
+import { api } from "../api";
 import GlassCard from "../components/GlassCard";
 import CircularProgress from "../components/CircularProgress";
 import XPBar from "../components/XPBar";
 import BadgeGrid from "../components/BadgeGrid";
+import ActivityFeed from "../components/ActivityFeed";
+import { useProgress } from "../state/ProgressContext";
 
-export default function ProgressPage({ user }: { user: User }) {
-  const [data, setData] = useState<ProgressSummary | null>(null);
-  const [gam, setGam] = useState<Gamification | null>(null);
-  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+export default function ProgressPage() {
+  const { user, progress: data, gamification: gam, scenarios, courses, activity, refresh, notify } = useProgress();
   const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  const load = () => {
-    api.progress(user.id).then(setData).catch(console.error);
-    api.badges(user.id).then(setGam).catch(console.error);
-    api.scenarios().then(setScenarios).catch(console.error);
-  };
-
-  useEffect(load, [user.id]);
-
   const sync = async () => {
+    if (!user) return;
     setSyncing(true);
     setToast(null);
     try {
       const res = await api.syncIspring(user.id);
-      setToast({ kind: "ok", text: `Результаты отправлены в iSpring (режим: ${res.mode}).` });
+      const t = `Результаты отправлены в iSpring (режим: ${res.mode}).`;
+      setToast({ kind: "ok", text: t });
+      notify("ok", t);
     } catch (e: any) {
       setToast({ kind: "err", text: `Ошибка: ${e.message}` });
+      notify("err", e.message);
     } finally {
       setSyncing(false);
       setTimeout(() => setToast(null), 4000);
     }
   };
 
-  if (!data || !gam) {
+  if (!data || !gam || !user) {
     return (
       <div className="flex h-72 items-center justify-center">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-navy-900/20 border-t-gold-500" />
@@ -45,8 +50,19 @@ export default function ProgressPage({ user }: { user: User }) {
   }
 
   const titleByScenario: Record<string, string> = Object.fromEntries(
-    scenarios.map((s) => [s.id, s.title])
+    scenarios.map((s) => [s.id, s.title]),
   );
+  const titleByCourseSlug: Record<string, string> = Object.fromEntries(
+    courses.map((c) => [c.slug, c.title]),
+  );
+
+  const moduleTitle = (m: { module: string; kind: string }) => {
+    if (m.kind === "course" || m.module.startsWith("course:")) {
+      const slug = m.module.replace(/^course:/, "");
+      return titleByCourseSlug[slug] ?? slug;
+    }
+    return titleByScenario[m.module] ?? m.module;
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -57,18 +73,23 @@ export default function ProgressPage({ user }: { user: User }) {
           </div>
           <h1 className="hero-text mt-2">Мой прогресс</h1>
           <p className="mt-2 text-base text-navy-900/60 dark:text-white/60">
-            Сводка по модулям, баллам и достижениям
+            Сводка по курсам, симуляторам и достижениям
           </p>
         </div>
-        <motion.button
-          whileHover={{ y: -2 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={sync}
-          disabled={syncing}
-          className="btn-gold"
-        >
-          {syncing ? "Отправка…" : (<><Send size={14} /> Отправить в iSpring</>)}
-        </motion.button>
+        <div className="flex items-center gap-2">
+          <button onClick={refresh} className="btn-ghost">
+            <ActivityIcon size={14} /> Обновить
+          </button>
+          <motion.button
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={sync}
+            disabled={syncing}
+            className="btn-gold"
+          >
+            {syncing ? "Отправка…" : (<><Send size={14} /> В iSpring</>)}
+          </motion.button>
+        </div>
       </div>
 
       {toast && (
@@ -86,15 +107,15 @@ export default function ProgressPage({ user }: { user: User }) {
         </motion.div>
       )}
 
-      <div className="grid gap-5 md:grid-cols-3">
-        <GlassCard interactive className="flex flex-col items-center text-center">
-          <CircularProgress value={data.overall_completion_pct} sublabel="общий прогресс" />
-          <div className="mt-3 text-sm font-medium text-navy-900/60 dark:text-white/60">
+      <div className="grid gap-5 md:grid-cols-4">
+        <GlassCard interactive className="flex flex-col items-center text-center md:col-span-1">
+          <CircularProgress value={data.overall_completion_pct} sublabel="прогресс" />
+          <div className="mt-3 text-xs font-medium text-navy-900/60 dark:text-white/60">
             По всем модулям
           </div>
         </GlassCard>
 
-        <GlassCard interactive>
+        <GlassCard interactive className="md:col-span-2">
           <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
             XP и уровень
           </div>
@@ -111,11 +132,86 @@ export default function ProgressPage({ user }: { user: User }) {
             {gam.badges.filter((b) => b.earned).length}
             <span className="text-lg text-navy-900/40 dark:text-white/40"> / {gam.badges.length}</span>
           </div>
-          <div className="mt-4 text-sm text-navy-900/60 dark:text-white/60">
+          <div className="mt-4 text-xs text-navy-900/60 dark:text-white/60">
             Получено за всё время обучения
           </div>
         </GlassCard>
       </div>
+
+      <section className="grid gap-5 md:grid-cols-2">
+        <GlassCard>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <BookOpen size={16} className="text-gold-500" /> Курсы
+            </div>
+            <span className="chip">
+              {data.breakdown.courses_done} / {data.breakdown.courses_total}
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {courses.map((c) => {
+              const totalSteps = c.lessons_count + 1;
+              const done = c.lessons_completed + (c.completed ? 1 : 0);
+              const pct = Math.round((done / totalSteps) * 100);
+              return (
+                <div key={c.slug} className="rounded-2xl border border-navy-900/8 bg-white/40 px-4 py-3 dark:border-white/8 dark:bg-white/[0.03]">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{c.title}</div>
+                      <div className="text-[11px] text-navy-900/50 dark:text-white/50">
+                        {done}/{totalSteps} модулей
+                      </div>
+                    </div>
+                    <div className="ml-3 text-sm font-semibold tabular-nums">{pct}%</div>
+                  </div>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-navy-900/8 dark:bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-600"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Gamepad2 size={16} className="text-gold-500" /> Сценарии симулятора
+            </div>
+            <span className="chip">
+              {data.breakdown.simulator_done} / {data.breakdown.simulator_total}
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {scenarios.map((s) => {
+              const row = data.modules.find((m) => m.module === s.id);
+              const pct = Math.round(row?.completion_pct ?? 0);
+              return (
+                <div key={s.id} className="rounded-2xl border border-navy-900/8 bg-white/40 px-4 py-3 dark:border-white/8 dark:bg-white/[0.03]">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{s.title}</div>
+                      <div className="text-[11px] text-navy-900/50 dark:text-white/50">
+                        {row ? `${row.points} XP` : "Не пройдено"}
+                      </div>
+                    </div>
+                    <div className="ml-3 text-sm font-semibold tabular-nums">{pct}%</div>
+                  </div>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-navy-900/8 dark:bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-600"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+      </section>
 
       <section>
         <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold tracking-tight">
@@ -125,11 +221,20 @@ export default function ProgressPage({ user }: { user: User }) {
       </section>
 
       <section>
-        <h2 className="mb-4 font-display text-xl font-semibold tracking-tight">Модули</h2>
+        <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold tracking-tight">
+          <ActivityIcon size={18} className="text-gold-500" /> Журнал активности
+        </h2>
+        <GlassCard className="!p-7">
+          <ActivityFeed items={activity} />
+        </GlassCard>
+      </section>
+
+      <section>
+        <h2 className="mb-4 font-display text-xl font-semibold tracking-tight">Все модули</h2>
         <GlassCard className="!p-0">
           {data.modules.length === 0 ? (
             <div className="p-10 text-center text-sm text-navy-900/50 dark:text-white/50">
-              Вы ещё не проходили ни одного модуля. Начните с симулятора.
+              Вы ещё не проходили ни одного модуля. Начните с курса.
             </div>
           ) : (
             <div className="divide-y divide-navy-900/8 dark:divide-white/8">
@@ -141,9 +246,14 @@ export default function ProgressPage({ user }: { user: User }) {
                   transition={{ delay: 0.05 * i }}
                   className="grid grid-cols-[1fr_120px_64px_72px] items-center gap-4 px-6 py-4"
                 >
-                  <div>
-                    <div className="text-sm font-semibold">{titleByScenario[m.module] ?? m.module}</div>
-                    <div className="text-[11px] text-navy-900/50 dark:text-white/50">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-navy-900/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-navy-900/60 dark:bg-white/10 dark:text-white/60">
+                        {m.kind === "course" || m.module.startsWith("course:") ? "Курс" : "Сценарий"}
+                      </span>
+                      <span className="truncate text-sm font-semibold">{moduleTitle(m)}</span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-navy-900/50 dark:text-white/50">
                       {new Date(m.updated_at).toLocaleString("ru-RU")}
                     </div>
                   </div>
