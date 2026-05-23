@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   NorthNavigate,
@@ -27,7 +27,6 @@ export function useNorth() {
   const [isTyping, setIsTyping] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const greetingShown = useRef(false);
 
   /** Act on a navigate hint coming back from /respond. We wait briefly so the
    * celebration animation has a chance to play before yanking the route. */
@@ -47,35 +46,16 @@ export function useNorth() {
     try {
       const next = await api.northProgress();
       setProgress(next);
-      // Tag this as today's first sighting so we can play the "hyped" state
-      // exactly once per day per user.
-      const today = new Date().toISOString().slice(0, 10);
-      const lastSeen = (() => {
-        try {
-          return localStorage.getItem("kompas_north_last_seen");
-        } catch {
-          return null;
-        }
-      })();
-      const isFirstVisitToday = lastSeen !== today && !greetingShown.current;
-      try {
-        localStorage.setItem("kompas_north_last_seen", today);
-      } catch {
-        /* quota */
-      }
-      greetingShown.current = true;
-
+      // State strictly mirrors the current step's declared north_state so the
+      // mascot's emotion always matches the prompt context (no random hyped/idle
+      // jumps on revisit).
       if (next.completed) {
         setState("celebrating");
-      } else if (!next.scenario) {
+      } else if (!next.scenario || !next.next_step) {
         setState("idle");
-      } else if (isFirstVisitToday) {
-        setState("hyped");
       } else {
-        setState(next.next_step?.north_state ?? "waiting");
+        setState(next.next_step.north_state ?? "waiting");
       }
-      // Always start with the typewriter running so the user sees the message
-      // build up rather than appearing all at once.
       setIsTyping(true);
     } catch (e: any) {
       setError(e?.detail || e?.message || String(e));
@@ -135,14 +115,10 @@ export function useNorth() {
           setState("celebrating");
           setIsTyping(false);
         } else if (result.next_step) {
-          setState("celebrating");
-          // Replay the typewriter for the new step's message.
+          // Jump straight to the next step's declared state — no random
+          // celebration flicker between steps.
+          setState(result.next_step.north_state ?? "waiting");
           setIsTyping(true);
-          // After a short celebration, drop into the next step's state. The
-          // typewriter onDone callback will take over from there.
-          window.setTimeout(() => {
-            setState(result.next_step!.north_state);
-          }, 600);
         } else {
           setState("idle");
           setIsTyping(false);
@@ -162,7 +138,7 @@ export function useNorth() {
     try {
       const next = await api.northReset();
       setProgress(next);
-      setState("hyped");
+      setState(next.next_step?.north_state ?? "waiting");
       setIsTyping(true);
     } catch (e: any) {
       setError(e?.detail || e?.message || String(e));

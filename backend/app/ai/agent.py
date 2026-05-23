@@ -403,11 +403,29 @@ async def hybrid_retrieve(
     return rag_index.search(question, top_k=top_k)
 
 
+_LANG_LABEL = {
+    "ru": "русском",
+    "uz": "узбекском (oʻzbekcha, латиница)",
+    "en": "английском",
+}
+
+
+def _system_with_locale(system: str, locale: str | None) -> str:
+    label = _LANG_LABEL.get((locale or "").lower())
+    if not label:
+        return system
+    return (
+        f"{system}\n\nВАЖНО: отвечай строго на {label} языке, "
+        "даже если вопрос или фрагменты базы знаний на другом языке."
+    )
+
+
 async def agent_answer(
     question: str,
     top_k: int = 4,
     *,
     direction: str | None = None,
+    locale: str | None = None,
 ) -> tuple[str, list[tuple[Chunk, float]]]:
     """Single-turn RAG answer. Used by the AI assistant chat.
 
@@ -420,7 +438,7 @@ async def agent_answer(
         # Mock path — keep parity with the previous "mock answer" behaviour
         # so the chat doesn't die when the platform is in offline mode.
         from app.ai.llm import generate_answer
-        text = await generate_answer(question, hits)
+        text = await generate_answer(question, hits, locale=locale)
         return text, hits
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
@@ -430,7 +448,7 @@ async def agent_answer(
             f"Вопрос: {question}"
         )
         result = await llm.ainvoke([
-            SystemMessage(content=ASSISTANT_SYSTEM),
+            SystemMessage(content=_system_with_locale(ASSISTANT_SYSTEM, locale)),
             HumanMessage(content=msg),
         ])
         text = result.content if isinstance(result.content, str) else str(result.content)
@@ -438,7 +456,7 @@ async def agent_answer(
     except Exception:
         log.exception("Gemini assistant call failed; falling back to mock")
         from app.ai.llm import generate_answer
-        text = await generate_answer(question, hits)
+        text = await generate_answer(question, hits, locale=locale)
         return text, hits
 
 

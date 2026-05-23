@@ -30,7 +30,9 @@ from app.db.models import (
     ChatMessage,
     CourseProgress,
     CustomCourse,
+    Direction,
     KnowledgeFile,
+    KnowledgeInstruction,
     LessonProgress,
     Progress,
     SimulatorSession,
@@ -81,6 +83,9 @@ class CourseCreateRequest(BaseModel):
     estimated_minutes: int = 15
     target_scenario_id: str = ""
     tags: list[str] = []
+    directions: list[str] = []
+    prerequisite_slug: str = ""
+    order_index: int = 0
     lessons: list[CourseLessonIn]
     quiz: list[CourseQuizQuestionIn]
 
@@ -96,6 +101,9 @@ class CustomCourseOut(BaseModel):
     estimated_minutes: int
     target_scenario_id: str
     tags: list[str]
+    directions: list[str] = []
+    prerequisite_slug: str = ""
+    order_index: int = 0
     lessons_count: int
     quiz_count: int
     created_at: datetime
@@ -109,6 +117,7 @@ class RegulationOut(BaseModel):
     modified_at: datetime
     # Direction the file belongs to ("Backend", "HR", ...). "" = unclassified.
     direction: str = ""
+    directions: list[str] = []
     title: str = ""
     vector_count: int = 0
     content_type: str = ""
@@ -142,6 +151,9 @@ class CourseUpdateRequest(BaseModel):
     estimated_minutes: int = 15
     target_scenario_id: str = ""
     tags: list[str] = []
+    directions: list[str] = []
+    prerequisite_slug: str = ""
+    order_index: int = 0
     lessons: list[CourseLessonIn]
     quiz: list[CourseQuizQuestionIn]
 
@@ -162,6 +174,7 @@ class AdminUserCreateRequest(BaseModel):
     role: Literal["user", "hr", "admin"] = "user"
     position: str = "intern"
     department: str = ""
+    directions: list[str] = []
     program: str = ""
 
 
@@ -187,6 +200,9 @@ async def admin_courses(db: AsyncSession = Depends(get_session)):
                 estimated_minutes=c["estimated_minutes"],
                 target_scenario_id=c["target_scenario_id"],
                 tags=c["tags"],
+                directions=list(c.get("directions") or []),
+                prerequisite_slug="",
+                order_index=0,
                 lessons_count=c["lessons_count"],
                 quiz_count=c["quiz_count"],
                 created_at=datetime.utcnow(),
@@ -218,6 +234,9 @@ async def admin_courses(db: AsyncSession = Depends(get_session)):
                 estimated_minutes=r.estimated_minutes,
                 target_scenario_id=r.target_scenario_id or "",
                 tags=r.tags or [],
+                directions=list(r.directions or []),
+                prerequisite_slug=r.prerequisite_slug or "",
+                order_index=r.order_index or 0,
                 lessons_count=len(r.lessons or []),
                 quiz_count=len(r.quiz or []),
                 created_at=r.created_at,
@@ -256,6 +275,9 @@ async def admin_create_course(
         estimated_minutes=payload.estimated_minutes,
         target_scenario_id=payload.target_scenario_id,
         tags=payload.tags,
+        directions=payload.directions,
+        prerequisite_slug=payload.prerequisite_slug,
+        order_index=payload.order_index,
         lessons=[l.model_dump() for l in payload.lessons],
         quiz=[q.model_dump() for q in payload.quiz],
         created_by=user.id,
@@ -282,6 +304,9 @@ async def admin_create_course(
         estimated_minutes=course.estimated_minutes,
         target_scenario_id=course.target_scenario_id or "",
         tags=course.tags or [],
+        directions=list(course.directions or []),
+        prerequisite_slug=course.prerequisite_slug or "",
+        order_index=course.order_index or 0,
         lessons_count=len(course.lessons or []),
         quiz_count=len(course.quiz or []),
         created_at=course.created_at,
@@ -313,6 +338,9 @@ async def admin_update_course(
     course.estimated_minutes = payload.estimated_minutes
     course.target_scenario_id = payload.target_scenario_id
     course.tags = payload.tags
+    course.directions = payload.directions
+    course.prerequisite_slug = payload.prerequisite_slug
+    course.order_index = payload.order_index
     course.lessons = [l.model_dump() for l in payload.lessons]
     course.quiz = [q.model_dump() for q in payload.quiz]
 
@@ -342,6 +370,9 @@ async def admin_update_course(
         estimated_minutes=course.estimated_minutes,
         target_scenario_id=course.target_scenario_id or "",
         tags=course.tags or [],
+        directions=list(course.directions or []),
+        prerequisite_slug=course.prerequisite_slug or "",
+        order_index=course.order_index or 0,
         lessons_count=len(course.lessons or []),
         quiz_count=len(course.quiz or []),
         created_at=course.created_at,
@@ -376,6 +407,36 @@ async def admin_generate_quiz(payload: QuizGenerateRequest):
     if not questions:
         raise HTTPException(422, "Не удалось сгенерировать вопросы")
     return questions
+
+
+@router.get("/courses/raw/{slug}")
+async def admin_course_raw(slug: str, db: AsyncSession = Depends(get_session)):
+    """Return a course's full source content (lessons + quiz with `correct`
+    flags). Used by the admin clone-to-custom flow so the resulting draft has
+    fully editable quiz options instead of stripped public ones."""
+    # Try custom courses first.
+    row = await db.scalar(select(CustomCourse).where(CustomCourse.slug == slug))
+    if row:
+        return {
+            "slug": row.slug,
+            "title": row.title,
+            "subtitle": row.subtitle or "",
+            "description": row.description or "",
+            "icon": row.icon or "book",
+            "difficulty": row.difficulty or "easy",
+            "estimated_minutes": row.estimated_minutes or 10,
+            "target_scenario_id": row.target_scenario_id or "",
+            "tags": list(row.tags or []),
+            "directions": list(row.directions or []),
+            "prerequisite_slug": row.prerequisite_slug or "",
+            "order_index": row.order_index or 0,
+            "lessons": list(row.lessons or []),
+            "quiz": list(row.quiz or []),
+        }
+    built = COURSES.get(slug)
+    if not built:
+        raise HTTPException(404, "Course not found")
+    return built
 
 
 @router.delete("/courses/{course_id}")
@@ -455,6 +516,7 @@ async def admin_regulations(
             size_bytes=r.size_bytes,
             modified_at=r.updated_at or r.created_at,
             direction=r.direction or "",
+            directions=list(getattr(r, "directions", None) or ([r.direction] if r.direction else [])),
             title=r.title or r.filename,
             vector_count=r.vector_count or 0,
             content_type=r.content_type or "",
@@ -560,6 +622,7 @@ async def admin_upload_regulation(
 
 class RegulationPatch(BaseModel):
     direction: str = ""
+    directions: list[str] | None = None
 
 
 @router.patch("/regulations/{filename}")
@@ -577,6 +640,8 @@ async def admin_patch_regulation(
         raise HTTPException(404, "Файл не найден")
     new_direction = (payload.direction or "").strip()[:128]
     record.direction = new_direction
+    if payload.directions is not None:
+        record.directions = [d.strip()[:128] for d in payload.directions if d and d.strip()]
 
     # Re-index in Qdrant so the new direction lands on existing chunks.
     if safe_name.lower().endswith((".md", ".markdown", ".txt")):
@@ -649,6 +714,7 @@ async def admin_list_users(db: AsyncSession = Depends(get_session)):
             "role": u.role,
             "position": u.position,
             "department": u.department,
+            "directions": list(u.directions or []),
             "program": u.program,
             "created_at": u.created_at,
         }
@@ -676,6 +742,7 @@ async def admin_create_user(
         role=payload.role,
         position=payload.position or "intern",
         department=payload.department,
+        directions=payload.directions or [],
         program=payload.program,
     )
     db.add(new_user)
@@ -783,6 +850,7 @@ class AdminUserUpdate(BaseModel):
     role: Literal["user", "hr", "admin"] | None = None
     position: str | None = None
     department: str | None = None
+    directions: list[str] | None = None
     program: str | None = None
     job_title: str | None = None
     avatar_url: str | None = None
@@ -812,6 +880,8 @@ async def admin_update_user(
         target.position = payload.position
     if payload.department is not None:
         target.department = payload.department
+    if payload.directions is not None:
+        target.directions = payload.directions
     if payload.program is not None:
         target.program = payload.program
     if payload.job_title is not None and payload.job_title != target.job_title:
@@ -1034,3 +1104,214 @@ async def _generate_quiz_questions(source: str, count: int) -> list[dict]:
         })
     questions = [q for q in questions if q["question"] and q["options"]]
     return questions or _rule_based_quiz(source, count)
+
+
+# ---------------------------------------------------------------------------
+# Directions (admin-managed list)
+# ---------------------------------------------------------------------------
+
+
+class DirectionIn(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    description: str = ""
+
+
+class DirectionPatch(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class DirectionOut(BaseModel):
+    id: int
+    name: str
+    description: str
+
+
+@router.get("/directions", response_model=list[DirectionOut])
+async def admin_list_directions(db: AsyncSession = Depends(get_session)):
+    rows = (await db.scalars(select(Direction).order_by(Direction.name))).all()
+    return [DirectionOut(id=d.id, name=d.name, description=d.description or "") for d in rows]
+
+
+@router.post("/directions", response_model=DirectionOut, status_code=status.HTTP_201_CREATED)
+async def admin_create_direction(
+    payload: DirectionIn, db: AsyncSession = Depends(get_session)
+):
+    existing = await db.scalar(select(Direction).where(Direction.name == payload.name.strip()))
+    if existing:
+        raise HTTPException(409, "Направление уже существует")
+    row = Direction(name=payload.name.strip(), description=payload.description or "")
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return DirectionOut(id=row.id, name=row.name, description=row.description or "")
+
+
+@router.patch("/directions/{direction_id}", response_model=DirectionOut)
+async def admin_update_direction(
+    direction_id: int,
+    payload: DirectionPatch,
+    db: AsyncSession = Depends(get_session),
+):
+    row = await db.get(Direction, direction_id)
+    if not row:
+        raise HTTPException(404, "Направление не найдено")
+    if payload.name is not None:
+        row.name = payload.name.strip()
+    if payload.description is not None:
+        row.description = payload.description
+    await db.commit()
+    await db.refresh(row)
+    return DirectionOut(id=row.id, name=row.name, description=row.description or "")
+
+
+@router.delete("/directions/{direction_id}")
+async def admin_delete_direction(direction_id: int, db: AsyncSession = Depends(get_session)):
+    row = await db.get(Direction, direction_id)
+    if not row:
+        raise HTTPException(404, "Направление не найдено")
+    await db.delete(row)
+    await db.commit()
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Delete user
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/users/{user_id}")
+async def admin_delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    if user_id == user.id:
+        raise HTTPException(400, "Нельзя удалить самого себя")
+    target = await db.get(User, user_id)
+    if not target:
+        raise HTTPException(404, "Пользователь не найден")
+    name = target.full_name
+    await db.delete(target)
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="admin_user_deleted",
+        title=f"Удалён пользователь: {name}",
+        detail=f"id={user_id}",
+    )
+    await db.commit()
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Delete chat message (AI chat) — soft-delete with audit
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/chat-messages/{message_id}")
+async def admin_delete_chat_message(
+    message_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    msg = await db.get(ChatMessage, message_id)
+    if not msg:
+        raise HTTPException(404, "Сообщение не найдено")
+    msg.deleted = True
+    msg.deleted_by = user.id
+    await db.commit()
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Knowledge instructions (AI auto-detected)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeInstructionOut(BaseModel):
+    id: int
+    question: str
+    answer: str
+    sources: list[dict] = []
+    verification_status: str
+    verification_notes: str
+    knowledge_filename: str
+    direction: str
+    created_at: datetime
+
+
+@router.get("/knowledge-instructions", response_model=list[KnowledgeInstructionOut])
+async def admin_list_knowledge_instructions(db: AsyncSession = Depends(get_session)):
+    rows = (
+        await db.scalars(
+            select(KnowledgeInstruction).order_by(KnowledgeInstruction.created_at.desc())
+        )
+    ).all()
+    return [
+        KnowledgeInstructionOut(
+            id=r.id,
+            question=r.question,
+            answer=r.answer,
+            sources=list(r.sources or []),
+            verification_status=r.verification_status or "unverified",
+            verification_notes=r.verification_notes or "",
+            knowledge_filename=r.knowledge_filename or "",
+            direction=r.direction or "",
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/knowledge-instructions/{instruction_id}/verify", response_model=KnowledgeInstructionOut)
+async def admin_verify_instruction(instruction_id: int, db: AsyncSession = Depends(get_session)):
+    row = await db.get(KnowledgeInstruction, instruction_id)
+    if not row:
+        raise HTTPException(404, "Запись не найдена")
+    row.verification_status = "verified"
+    await db.commit()
+    await db.refresh(row)
+    return KnowledgeInstructionOut(
+        id=row.id,
+        question=row.question,
+        answer=row.answer,
+        sources=list(row.sources or []),
+        verification_status=row.verification_status,
+        verification_notes=row.verification_notes or "",
+        knowledge_filename=row.knowledge_filename or "",
+        direction=row.direction or "",
+        created_at=row.created_at,
+    )
+
+
+@router.delete("/knowledge-instructions/{instruction_id}")
+async def admin_delete_instruction(
+    instruction_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    row = await db.get(KnowledgeInstruction, instruction_id)
+    if not row:
+        raise HTTPException(404, "Запись не найдена")
+    # Also remove the markdown file from the regulations directory so the AI
+    # mentor stops citing it.
+    if row.knowledge_filename:
+        try:
+            (settings.regulations_path / row.knowledge_filename).unlink(missing_ok=True)
+        except Exception:
+            pass
+        try:
+            rag_index.load_dir(settings.regulations_path)
+        except Exception:
+            pass
+    await db.delete(row)
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="admin_instruction_deleted",
+        title="Инструкция удалена из базы знаний",
+        detail=row.question[:140],
+    )
+    await db.commit()
+    return {"deleted": True}

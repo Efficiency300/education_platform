@@ -380,6 +380,11 @@ COURSES: dict[str, dict] = {
 
 
 def list_courses() -> list[dict]:
+    # Every built-in course currently targets the Call Center department.
+    # Admins can override this per-course in the future by promoting it to a
+    # custom course; for now we hard-bind built-ins so the department filter
+    # actually shows them to the right team.
+    DEFAULT_BUILTIN_DIRECTIONS = ["Call Center"]
     return [
         {
             "slug": c["slug"],
@@ -391,6 +396,7 @@ def list_courses() -> list[dict]:
             "estimated_minutes": c["estimated_minutes"],
             "target_scenario_id": c["target_scenario_id"],
             "tags": c["tags"],
+            "directions": c.get("directions") or DEFAULT_BUILTIN_DIRECTIONS,
             "lessons_count": len(c["lessons"]),
             "quiz_count": len(c["quiz"]),
         }

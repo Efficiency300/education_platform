@@ -50,7 +50,13 @@ export default function MobileNav() {
           borderBottom: "0.5px solid var(--border)",
         }}
       >
-        <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 26, width: "auto" }} />
+        <NavLink
+          to={user.role === "admin" ? "/admin" : user.role === "hr" ? "/hr" : "/"}
+          end
+          aria-label="KOMPAS"
+        >
+          <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 26, width: "auto", display: "block" }} />
+        </NavLink>
         <button
           onClick={logout}
           className="flex items-center justify-center"

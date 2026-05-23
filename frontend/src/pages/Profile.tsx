@@ -1,11 +1,11 @@
 import { useState, useRef } from "react";
-import { Camera, Save, Trash2 } from "lucide-react";
+import { Camera, LogOut, Save, Trash2 } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../state/AuthContext";
 import { useT } from "../state/LocaleContext";
 
 export default function ProfilePage() {
-  const { user, setUser } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const t = useT();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fullName, setFullName] = useState(user?.full_name ?? "");
@@ -162,7 +162,7 @@ export default function ProfilePage() {
                 color: "var(--text-primary)",
               }}
             >
-              {user.role}
+              {t(`position.${user.position}`) || user.position} · {t(`role.${user.role}`)}
             </div>
           </div>
           <div>
@@ -177,10 +177,31 @@ export default function ProfilePage() {
                 color: "var(--text-primary)",
               }}
             >
-              {user.job_title || "—"}
+              {user.job_title || user.department || "—"}
             </div>
           </div>
         </div>
+        {user.directions && user.directions.length > 0 && (
+          <div className="mt-5">
+            <label style={fieldLabel}>{t("profile.directions")}</label>
+            <div className="flex flex-wrap gap-2">
+              {user.directions.map((d) => (
+                <span
+                  key={d}
+                  style={{
+                    padding: "4px 10px",
+                    background: "var(--bg-card)",
+                    border: "0.5px solid var(--border)",
+                    borderRadius: 99,
+                    fontSize: 12,
+                  }}
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <p
           className="mt-2"
           style={{ fontSize: 11, color: "var(--text-tertiary)" }}
@@ -218,7 +239,18 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex justify-between gap-3">
+        <button
+          onClick={logout}
+          className="btn-ghost"
+          style={{
+            color: "var(--danger)",
+            border: "0.5px solid rgba(240,62,62,0.3)",
+            background: "rgba(240,62,62,0.05)",
+          }}
+        >
+          <LogOut size={14} /> {t("profile.logout")}
+        </button>
         <button
           onClick={save}
           disabled={busy || !dirty || !fullName.trim()}

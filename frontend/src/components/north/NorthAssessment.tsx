@@ -7,7 +7,7 @@ import {
   NorthAssessSubmit,
   NorthAssessmentQuestion,
 } from "../../api";
-import { useT } from "../../state/LocaleContext";
+import { useLocale, useT } from "../../state/LocaleContext";
 import NorthBubble from "./NorthBubble";
 import NorthMascot from "./NorthMascot";
 import NorthProgress from "./NorthProgress";
@@ -28,13 +28,14 @@ type Phase =
  */
 export default function NorthAssessment({ onClose }: { onClose: () => void }) {
   const t = useT();
+  const { locale } = useLocale();
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
 
   const begin = useCallback(async () => {
     setPhase({ kind: "loading" });
     try {
-      const data = await api.northAssessStart();
+      const data = await api.northAssessStart(locale);
       setPhase({
         kind: "ready",
         intro: data.intro,
@@ -46,7 +47,7 @@ export default function NorthAssessment({ onClose }: { onClose: () => void }) {
       console.error(e);
       onClose();
     }
-  }, [onClose]);
+  }, [onClose, locale]);
 
   useEffect(() => {
     begin().catch(console.error);
@@ -130,7 +131,7 @@ export default function NorthAssessment({ onClose }: { onClose: () => void }) {
   const submitAll = async (finalPicked: Record<string, string>) => {
     setPhase({ kind: "submitting" });
     try {
-      const result = await api.northAssessSubmit(questions, finalPicked);
+      const result = await api.northAssessSubmit(questions, finalPicked, locale);
       setPhase({ kind: "result", result });
     } catch (e) {
       console.error(e);

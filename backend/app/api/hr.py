@@ -468,3 +468,81 @@ async def hr_analytics(db: AsyncSession = Depends(get_session)):
         xp_distribution=xp_distribution,
         activity_last_14d=days,
     )
+
+
+# ---------------------------------------------------------------------------
+# AI chat history visibility for HR/admin
+# ---------------------------------------------------------------------------
+
+
+class HRChatThread(BaseModel):
+    user_id: int
+    full_name: str
+    email: str
+    department: str
+    message_count: int
+    last_message_at: datetime | None
+    last_question: str
+
+
+@router.get("/chats", response_model=list[HRChatThread])
+async def hr_chat_list(db: AsyncSession = Depends(get_session)):
+    """One row per user that's interacted with the AI assistant — message
+    count, latest activity and a preview of their last question."""
+    msgs = (
+        await db.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.deleted.is_(False) if hasattr(ChatMessage, "deleted") else True)  # type: ignore[arg-type]
+            .order_by(ChatMessage.created_at.desc())
+        )
+    ).all()
+    bucket: dict[int, list[ChatMessage]] = defaultdict(list)
+    for m in msgs:
+        bucket[m.user_id].append(m)
+    if not bucket:
+        return []
+    users = (await db.scalars(select(User).where(User.id.in_(bucket.keys())))).all()
+    by_id = {u.id: u for u in users}
+    out: list[HRChatThread] = []
+    for uid, items in bucket.items():
+        u = by_id.get(uid)
+        if not u:
+            continue
+        items.sort(key=lambda x: x.created_at, reverse=True)
+        last_q = next((m.content for m in items if m.role == "user"), items[0].content)
+        out.append(
+            HRChatThread(
+                user_id=uid,
+                full_name=u.full_name,
+                email=u.email,
+                department=u.department or "",
+                message_count=len(items),
+                last_message_at=items[0].created_at,
+                last_question=(last_q or "")[:200],
+            )
+        )
+    out.sort(key=lambda t: t.last_message_at or datetime.min, reverse=True)
+    return out
+
+
+class HRChatHistoryItem(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime
+
+
+@router.get("/chats/{user_id}/messages", response_model=list[HRChatHistoryItem])
+async def hr_chat_history(user_id: int, db: AsyncSession = Depends(get_session)):
+    rows = (
+        await db.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.user_id == user_id)
+            .where(ChatMessage.deleted.is_(False) if hasattr(ChatMessage, "deleted") else True)  # type: ignore[arg-type]
+            .order_by(ChatMessage.created_at.asc())
+        )
+    ).all()
+    return [
+        HRChatHistoryItem(id=r.id, role=r.role, content=r.content, created_at=r.created_at)
+        for r in rows
+    ]

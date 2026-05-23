@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, FileText, ChevronDown, Bot, User as UserIcon, Plus, MessageSquare } from "lucide-react";
 import { api, Source, streamChat } from "../api";
 import { useProgress } from "../state/ProgressContext";
-import { useT } from "../state/LocaleContext";
+import { useLocale, useT } from "../state/LocaleContext";
 
 interface Msg {
   role: "user" | "assistant";
@@ -49,6 +49,7 @@ function makeTitle(text: string, fallback: string): string {
 export default function Chat() {
   const { user, refresh } = useProgress();
   const t = useT();
+  const { locale } = useLocale();
   const SUGGESTIONS = [
     { label: t("chat.sug.dress"), q: t("chat.sug.dressQ") },
     { label: t("chat.sug.aml"), q: t("chat.sug.amlQ") },
@@ -200,7 +201,7 @@ export default function Chat() {
         });
         setBusy(false);
       },
-    });
+    }, locale);
     cancelRef.current = cancel;
   };
 

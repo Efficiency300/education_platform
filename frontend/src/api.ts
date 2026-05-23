@@ -63,6 +63,7 @@ export interface User {
   role: Role;
   position: string;
   department: string;
+  directions?: string[];
   program: string;
   job_title?: string;
   avatar_url?: string;
@@ -211,12 +212,16 @@ export interface CourseSummary {
   estimated_minutes: number;
   target_scenario_id: string;
   tags: string[];
+  directions?: string[];
+  prerequisite_slug?: string;
+  order_index?: number;
   lessons_count: number;
   quiz_count: number;
   lessons_completed: number;
   completed: boolean;
   quiz_score: number;
   quiz_max: number;
+  locked?: boolean;
 }
 
 export interface CourseLesson {
@@ -383,6 +388,9 @@ export interface AdminCourse {
   estimated_minutes: number;
   target_scenario_id: string;
   tags: string[];
+  directions?: string[];
+  prerequisite_slug?: string;
+  order_index?: number;
   lessons_count: number;
   quiz_count: number;
   created_at: string;
@@ -400,6 +408,9 @@ export interface AdminCourseCreate {
   estimated_minutes?: number;
   target_scenario_id?: string;
   tags?: string[];
+  directions?: string[];
+  prerequisite_slug?: string;
+  order_index?: number;
   lessons: {
     slug: string;
     title: string;
@@ -431,6 +442,7 @@ export interface AdminUserCreate {
   role?: Role;
   position?: string;
   department?: string;
+  directions?: string[];
   program?: string;
 }
 
@@ -439,6 +451,7 @@ export interface AdminRegulation {
   size_bytes: number;
   modified_at: string;
   direction?: string;
+  directions?: string[];
   title?: string;
   vector_count?: number;
   content_type?: string;
@@ -452,6 +465,7 @@ export interface AdminUser {
   role: Role;
   position: string;
   department: string;
+  directions?: string[];
   program: string;
   created_at: string;
 }
@@ -478,10 +492,10 @@ export const api = {
     return res.json() as Promise<HealthInfo>;
   },
   listUsers: () => request<User[]>("/users"),
-  ask: (user_id: number, message: string) =>
+  ask: (user_id: number, message: string, locale?: string) =>
     request<ChatResponse>("/chat", {
       method: "POST",
-      body: JSON.stringify({ user_id, message }),
+      body: JSON.stringify({ user_id, message, locale }),
     }),
   history: (user_id: number) => request<ChatHistoryItem[]>(`/chat/history/${user_id}`),
   scenarios: () => request<ScenarioSummary[]>("/simulator/scenarios"),
@@ -552,6 +566,23 @@ export const api = {
 
   // Admin
   adminCourses: () => request<AdminCourse[]>("/admin/courses"),
+  adminCourseRaw: (slug: string) =>
+    request<{
+      slug: string;
+      title: string;
+      subtitle: string;
+      description: string;
+      icon: string;
+      difficulty: string;
+      estimated_minutes: number;
+      target_scenario_id: string;
+      tags: string[];
+      directions: string[];
+      prerequisite_slug: string;
+      order_index: number;
+      lessons: AdminCourseCreate["lessons"];
+      quiz: AdminCourseCreate["quiz"];
+    }>(`/admin/courses/raw/${encodeURIComponent(slug)}`),
   adminCreateCourse: (payload: AdminCourseCreate) =>
     request<AdminCourse>("/admin/courses", {
       method: "POST",
@@ -604,6 +635,14 @@ export const api = {
     request<{ filename: string; direction: string; vector_count: number }>(
       `/admin/regulations/${encodeURIComponent(filename)}`,
       { method: "PATCH", body: JSON.stringify({ direction }) },
+    ),
+  adminPatchRegulationDirections: (filename: string, directions: string[]) =>
+    request<{ filename: string; direction: string; vector_count: number }>(
+      `/admin/regulations/${encodeURIComponent(filename)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ direction: directions[0] ?? "", directions }),
+      },
     ),
   adminDeleteRegulation: (filename: string) =>
     request<{ deleted: boolean; rag_chunks: number }>(
@@ -715,11 +754,19 @@ export const api = {
   // ---------- North scenarios ----------
   northScenario: () => request<NorthScenarioOut | null>("/north/scenario"),
   northProgress: () => request<NorthProgressPayload>("/north/progress"),
-  northAssessStart: () => request<NorthAssessStart>("/north/assess/start", { method: "POST" }),
-  northAssessSubmit: (questions: NorthAssessmentQuestion[], answers: Record<string, string>) =>
+  northAssessStart: (locale?: string) =>
+    request<NorthAssessStart>(
+      `/north/assess/start${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`,
+      { method: "POST" },
+    ),
+  northAssessSubmit: (
+    questions: NorthAssessmentQuestion[],
+    answers: Record<string, string>,
+    locale?: string,
+  ) =>
     request<NorthAssessSubmit>("/north/assess/submit", {
       method: "POST",
-      body: JSON.stringify({ questions, answers }),
+      body: JSON.stringify({ questions, answers, locale }),
     }),
   northReset: () =>
     request<NorthProgressPayload>("/north/progress", { method: "POST" }),
@@ -746,6 +793,55 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+  adminBuildScenario: (payload: NorthScenarioBuildRequest) =>
+    request<NorthScenarioOut>(`/admin/scenarios/build`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  // ---------- Directions (admin-managed list of departments) ----------
+  listDirections: () => request<DirectionItem[]>("/directions"),
+  adminCreateDirection: (payload: { name: string; description?: string }) =>
+    request<DirectionItem>("/admin/directions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  adminUpdateDirection: (id: number, payload: { name?: string; description?: string }) =>
+    request<DirectionItem>(`/admin/directions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  adminDeleteDirection: (id: number) =>
+    request<{ deleted: boolean }>(`/admin/directions/${id}`, { method: "DELETE" }),
+
+  // ---------- Admin: knowledge instructions (AI auto-detected) ----------
+  adminListKnowledgeInstructions: () =>
+    request<KnowledgeInstructionItem[]>("/admin/knowledge-instructions"),
+  adminDeleteKnowledgeInstruction: (id: number) =>
+    request<{ deleted: boolean }>(`/admin/knowledge-instructions/${id}`, {
+      method: "DELETE",
+    }),
+  adminVerifyKnowledgeInstruction: (id: number) =>
+    request<KnowledgeInstructionItem>(`/admin/knowledge-instructions/${id}/verify`, {
+      method: "POST",
+    }),
+
+  // ---------- Admin user CRUD ----------
+  adminDeleteUser: (user_id: number) =>
+    request<{ deleted: boolean }>(`/admin/users/${user_id}`, { method: "DELETE" }),
+
+  // ---------- Admin: delete chat / team messages ----------
+  adminDeleteChatMessage: (message_id: number) =>
+    request<{ deleted: boolean }>(`/admin/chat-messages/${message_id}`, { method: "DELETE" }),
+  adminDeleteTeamMessage: (team_id: number, message_id: number) =>
+    request<{ deleted: boolean }>(`/teams/${team_id}/messages/${message_id}`, {
+      method: "DELETE",
+    }),
+
+  // ---------- HR: all chats ----------
+  hrChatList: () => request<HRChatThread[]>("/hr/chats"),
+  hrChatHistory: (user_id: number) =>
+    request<ChatHistoryItem[]>(`/hr/chats/${user_id}/messages`),
 
   // ---------- Translation ----------
   translate: (text: string, target_lang: "ru" | "uz" | "en") =>
@@ -767,9 +863,20 @@ export interface AdminUserUpdate {
   role?: Role;
   position?: string;
   department?: string;
+  directions?: string[];
   program?: string;
   job_title?: string;
   avatar_url?: string;
+}
+
+export interface HRChatThread {
+  user_id: number;
+  full_name: string;
+  email: string;
+  department: string;
+  message_count: number;
+  last_message_at: string | null;
+  last_question: string;
 }
 
 export type TeamSeniority = "newcomer" | "member" | "senior";
@@ -789,6 +896,9 @@ export interface TeamMember {
   job_title: string;
   avatar_url: string;
   seniority: TeamSeniority;
+  role: Role;
+  position: string;
+  department: string;
 }
 
 export interface TeamMessage {
@@ -798,6 +908,9 @@ export interface TeamMessage {
   author_name: string;
   author_avatar: string;
   author_seniority: TeamSeniority;
+  author_role?: Role;
+  author_position?: string;
+  author_job_title?: string;
   content: string;
   kind: "message" | "question";
   canonical: boolean;
@@ -806,9 +919,16 @@ export interface TeamMessage {
 }
 
 /** Стрим SSE-чата. Возвращает функцию отмены. */
+export interface KnowledgeInstructionPlate {
+  id: number | null;
+  knowledge_filename: string;
+  verification_status: string;
+}
+
 export interface StreamHandlers {
   onSources?: (sources: Source[]) => void;
   onChunk?: (text: string) => void;
+  onInstruction?: (plate: KnowledgeInstructionPlate) => void;
   onDone?: (ms: number) => void;
   onError?: (msg: string) => void;
 }
@@ -817,6 +937,7 @@ export function streamChat(
   user_id: number,
   message: string,
   handlers: StreamHandlers,
+  locale?: string,
 ): () => void {
   const controller = new AbortController();
   (async () => {
@@ -828,7 +949,7 @@ export function streamChat(
           Accept: "text/event-stream",
           ...authHeaders(),
         },
-        body: JSON.stringify({ user_id, message }),
+        body: JSON.stringify({ user_id, message, locale }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -852,6 +973,7 @@ export function streamChat(
             const ev = JSON.parse(payload);
             if (ev.type === "sources") handlers.onSources?.(ev.sources);
             else if (ev.type === "chunk") handlers.onChunk?.(ev.text);
+            else if (ev.type === "instruction") handlers.onInstruction?.(ev.instruction);
             else if (ev.type === "done") handlers.onDone?.(ev.ms);
             else if (ev.type === "error") handlers.onError?.(ev.message);
           } catch {
@@ -944,8 +1066,11 @@ export interface NorthScenarioOut {
   scenario_uid: string;
   name: string;
   department: string;
+  directions?: string[];
+  assigned_user_id?: number | null;
   status: "draft" | "published";
   steps: NorthScenarioStep[];
+  course_tags?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -953,7 +1078,34 @@ export interface NorthScenarioOut {
 export interface NorthScenarioCreate {
   name: string;
   department?: string;
+  directions?: string[];
+  assigned_user_id?: number | null;
   steps?: NorthScenarioStep[];
+  course_tags?: string[];
+}
+
+export interface NorthScenarioBuildRequest {
+  description: string;
+  course_tags?: string[];
+  name?: string;
+}
+
+export interface DirectionItem {
+  id: number;
+  name: string;
+  description: string;
+}
+
+export interface KnowledgeInstructionItem {
+  id: number;
+  question: string;
+  answer: string;
+  sources: Array<{ title?: string; snippet?: string; url?: string }>;
+  verification_status: "verified" | "unverified";
+  verification_notes: string;
+  knowledge_filename: string;
+  direction: string;
+  created_at: string;
 }
 
 export interface NorthProgressPayload {

@@ -29,6 +29,28 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "users": {
         "job_title": "VARCHAR(128) DEFAULT ''",
         "avatar_url": "VARCHAR(512) DEFAULT ''",
+        "directions": "JSON",
+    },
+    "custom_courses": {
+        "directions": "JSON",
+        "order_index": "INTEGER DEFAULT 0",
+        "prerequisite_slug": "VARCHAR(128) DEFAULT ''",
+    },
+    "scenarios": {
+        "directions": "JSON",
+        "assigned_user_id": "INTEGER",
+        "course_tags": "JSON",
+    },
+    "knowledge_files": {
+        "directions": "JSON",
+    },
+    "chat_messages": {
+        "deleted": "BOOLEAN DEFAULT 0",
+        "deleted_by": "INTEGER",
+    },
+    "team_messages": {
+        "deleted": "BOOLEAN DEFAULT 0",
+        "deleted_by": "INTEGER",
     },
 }
 

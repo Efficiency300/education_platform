@@ -20,13 +20,14 @@ import {
 } from "../../api";
 import GlassCard from "../../components/GlassCard";
 import { LessonAttachmentsEditor } from "../../components/LessonAttachments";
+import DirectionsPicker from "../../components/DirectionsPicker";
 import { useProgress } from "../../state/ProgressContext";
 import { useT } from "../../state/LocaleContext";
 
 const DIFF_OPTIONS = ["easy", "medium", "hard"] as const;
 
 type EditorState =
-  | { mode: "create" }
+  | { mode: "create"; clone?: AdminCourse }
   | { mode: "edit"; course: AdminCourse };
 
 const BLANK: AdminCourseCreate = {
@@ -194,7 +195,17 @@ export default function AdminCourses() {
                       </button>
                     </>
                   ) : (
-                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>—</span>
+                    // Built-in: open the editor pre-filled with the built-in's
+                    // content + a "-custom" suffix on the slug. Saving creates
+                    // a new CustomCourse the admin owns.
+                    <button
+                      onClick={() => setEditor({ mode: "create", clone: c })}
+                      className="kp-icon-action"
+                      title={t("common.edit")}
+                      aria-label={t("common.edit")}
+                    >
+                      <Pencil size={14} />
+                    </button>
                   )}
                 </div>
               </motion.div>
@@ -237,10 +248,23 @@ export default function AdminCourses() {
       <AnimatePresence>
         {editor && (
           <CourseEditor
-            key={editor.mode === "edit" ? `edit-${editor.course.id}` : "create"}
+            key={
+              editor.mode === "edit"
+                ? `edit-${editor.course.id}`
+                : editor.clone
+                ? `clone-${editor.clone.slug}`
+                : "create"
+            }
             scenarios={scenarios}
-            initial={editor.mode === "edit" ? courseToDraft(editor.course) : undefined}
+            initial={
+              editor.mode === "edit"
+                ? courseToDraft(editor.course)
+                : editor.clone
+                ? courseToCloneDraft(editor.clone)
+                : undefined
+            }
             editingId={editor.mode === "edit" ? editor.course.id : null}
+            cloningSlug={editor.mode === "create" && editor.clone ? editor.clone.slug : null}
             onClose={() => setEditor(null)}
             onSaved={() => {
               load();
@@ -251,6 +275,40 @@ export default function AdminCourses() {
       </AnimatePresence>
     </div>
   );
+}
+
+/** Pre-fill the editor from a built-in course so the admin can publish their
+ * own edited copy. The slug gets a "-custom" suffix to avoid conflicts with
+ * the original built-in (which keeps living in catalog.py). */
+function courseToCloneDraft(c: AdminCourse): AdminCourseCreate {
+  return {
+    slug: `${c.slug}-custom`,
+    title: c.title,
+    subtitle: c.subtitle,
+    description: c.description,
+    icon: c.icon,
+    difficulty: c.difficulty,
+    estimated_minutes: c.estimated_minutes,
+    target_scenario_id: c.target_scenario_id,
+    tags: c.tags,
+    directions: c.directions ?? [],
+    prerequisite_slug: c.prerequisite_slug ?? "",
+    order_index: c.order_index ?? 0,
+    lessons: [
+      { slug: "l1", title: "Урок 1", summary: "", duration_min: 5, body_md: "" },
+    ],
+    quiz: [
+      {
+        id: "q1",
+        question: "",
+        options: [
+          { id: "a", text: "", correct: false },
+          { id: "b", text: "", correct: true },
+        ],
+        explanation: "",
+      },
+    ],
+  };
 }
 
 function courseToDraft(c: AdminCourse): AdminCourseCreate {
@@ -268,6 +326,9 @@ function courseToDraft(c: AdminCourse): AdminCourseCreate {
     estimated_minutes: c.estimated_minutes,
     target_scenario_id: c.target_scenario_id,
     tags: c.tags,
+    directions: c.directions ?? [],
+    prerequisite_slug: c.prerequisite_slug ?? "",
+    order_index: c.order_index ?? 0,
     lessons: [
       { slug: "l1", title: "Урок 1", summary: "", duration_min: 5, body_md: "" },
     ],
@@ -291,12 +352,14 @@ function CourseEditor({
   onSaved,
   initial,
   editingId,
+  cloningSlug,
 }: {
   scenarios: ScenarioSummary[];
   onClose: () => void;
   onSaved: () => void;
   initial?: AdminCourseCreate;
   editingId: number | null;
+  cloningSlug?: string | null;
 }) {
   const t = useT();
   const [draft, setDraft] = useState<AdminCourseCreate>(structuredClone(initial ?? BLANK));
@@ -307,12 +370,14 @@ function CourseEditor({
   const isEdit = editingId !== null;
 
   useEffect(() => {
-    if (!isEdit) return;
-    // Pull the full custom-course payload so the editor shows the actual
-    // lessons / quiz content (the admin list endpoint only returns counts).
+    // Hydrate both edit and clone flows with the actual lessons/quiz. The
+    // admin raw endpoint preserves `correct` flags on quiz options so the
+    // clone is immediately editable.
+    const sourceSlug = isEdit ? initial?.slug : cloningSlug;
+    if (!sourceSlug) return;
     api
-      .course(initial?.slug ?? "")
-      .then((c: any) => {
+      .adminCourseRaw(sourceSlug)
+      .then((c) => {
         const lessons = (c?.lessons ?? []) as AdminCourseCreate["lessons"];
         const quiz = (c?.quiz ?? []) as AdminCourseCreate["quiz"];
         setDraft((d) => ({
@@ -324,7 +389,7 @@ function CourseEditor({
       .catch(() => {
         /* keep default placeholders */
       });
-  }, [isEdit, initial?.slug]);
+  }, [isEdit, initial?.slug, cloningSlug]);
 
   const upd = <K extends keyof AdminCourseCreate>(k: K, v: AdminCourseCreate[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
@@ -539,6 +604,24 @@ function CourseEditor({
               className="input"
             />
           </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("admin.courses.editor.directions")}>
+              <DirectionsPicker
+                value={draft.directions ?? []}
+                onChange={(next) => upd("directions", next)}
+                placeholder={t("admin.courses.editor.directionsPh")}
+              />
+            </Field>
+            <Field label={t("admin.courses.editor.prerequisite")}>
+              <input
+                value={draft.prerequisite_slug ?? ""}
+                onChange={(e) => upd("prerequisite_slug", e.target.value.trim())}
+                className="input"
+                placeholder="abs_basics"
+              />
+            </Field>
+          </div>
         </div>
 
         <div className="mt-7">

@@ -33,7 +33,8 @@ async def user_id(client, request):
             "full_name": "Test User",
             "role": "user",
             "position": "intern",
-            "department": "QA",
+            "department": "Call Center",
+            "directions": ["Call Center"],
             "program": "test",
         },
     )

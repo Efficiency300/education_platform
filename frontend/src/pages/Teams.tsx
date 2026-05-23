@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import {
@@ -42,7 +43,7 @@ export default function TeamsPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="hero-text">{t("teams.title")}</h1>
+          <h1 className="hero-text">{t("nav.teamChat")}</h1>
           <p className="mt-2 max-w-2xl text-base" style={{ color: "var(--text-secondary)" }}>
             {t("teams.subtitle")}
           </p>
@@ -320,8 +321,18 @@ function TeamChat({ team }: { team: TeamSummary }) {
               msg={m}
               parent={m.parent_id ? messages.find((p) => p.id === m.parent_id) ?? null : null}
               canMarkCanonical={canMarkCanonical && m.parent_id !== null && !m.canonical}
+              canDelete={user?.role === "admin"}
               onReply={() => setReplyTo(m)}
               onMarkCanonical={() => markCanonical(m)}
+              onDelete={async () => {
+                if (!confirm(t("teams.confirmDelete"))) return;
+                try {
+                  await api.adminDeleteTeamMessage(team.id, m.id);
+                  setMessages((prev) => prev.filter((p) => p.id !== m.id));
+                } catch (e: any) {
+                  alert(e?.detail || e?.message || "—");
+                }
+              }}
             />
           ))}
         </ul>
@@ -395,14 +406,18 @@ function TeamBubble({
   msg,
   parent,
   canMarkCanonical,
+  canDelete,
   onReply,
   onMarkCanonical,
+  onDelete,
 }: {
   msg: TeamMessage;
   parent: TeamMessage | null;
   canMarkCanonical: boolean;
+  canDelete: boolean;
   onReply: () => void;
   onMarkCanonical: () => void;
+  onDelete: () => void;
 }) {
   const t = useT();
   const isQuestion = msg.kind === "question";
@@ -410,6 +425,11 @@ function TeamBubble({
     msg.author_seniority === "senior" ? (
       <ShieldCheck size={11} style={{ color: "var(--brand)" }} />
     ) : null;
+  const positionLabel = msg.author_position ? t(`position.${msg.author_position}`) : "";
+  const roleLabel = msg.author_role ? t(`role.${msg.author_role}`) : "";
+  const jobBits = [positionLabel, msg.author_job_title || roleLabel]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <motion.li
@@ -420,11 +440,25 @@ function TeamBubble({
     >
       <Avatar name={msg.author_name} url={msg.author_avatar} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-baseline gap-2 flex-wrap">
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
             {msg.author_name}
           </span>
           {seniorIcon}
+          {jobBits && (
+            <span
+              style={{
+                fontSize: 10,
+                padding: "1px 6px",
+                background: "var(--bg-card)",
+                border: "0.5px solid var(--border)",
+                borderRadius: 99,
+                color: "var(--text-tertiary)",
+              }}
+            >
+              {jobBits}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
             {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
@@ -487,6 +521,16 @@ function TeamBubble({
               title={t("teams.canonicalNotice")}
             >
               <CheckCircle2 size={12} /> {t("teams.markCanonical")}
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={onDelete}
+              className="btn-ghost"
+              style={{ padding: "4px 10px", fontSize: 11, color: "var(--danger)" }}
+              title={t("teams.confirmDelete")}
+            >
+              <Trash2 size={11} /> {t("teams.delete")}
             </button>
           )}
         </div>

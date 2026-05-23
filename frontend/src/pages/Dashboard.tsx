@@ -321,8 +321,8 @@ export default function Dashboard() {
           min-width: 0;
         }
         @media (min-width: 768px) {
-          .north-dashboard-main {
-            padding-right: 24px;
+          .north-dashboard-shell {
+            gap: 24px;
           }
         }
       `}</style>

@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     role: str = "user"           # user | hr | admin
     position: str = "intern"     # intern | employee
     department: str = ""
+    directions: list[str] = []
     program: str = ""
 
 
@@ -20,6 +21,7 @@ class UserOut(BaseModel):
     role: str
     position: str = "intern"
     department: str
+    directions: list[str] = []
     program: str
     job_title: str = ""
     avatar_url: str = ""
@@ -27,6 +29,12 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_validator("directions", mode="before")
+    @classmethod
+    def _directions_default(cls, v):
+        # Legacy rows store NULL for directions until the column is backfilled.
+        return v or []
 
 
 class ProfileUpdateRequest(BaseModel):

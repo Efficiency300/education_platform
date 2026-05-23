@@ -2,6 +2,11 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useT } from "../state/LocaleContext";
 
+function capitalize(s: string) {
+  if (!s) return "";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function usePageTitle(): { title: string; breadcrumb?: string } {
   const t = useT();
   const { pathname } = useLocation();
@@ -33,10 +38,14 @@ function usePageTitle(): { title: string; breadcrumb?: string } {
 
 export default function Topbar() {
   const { user } = useAuth();
+  const t = useT();
   const { title, breadcrumb } = usePageTitle();
   if (!user) return null;
 
   const firstInitial = user.full_name.trim().slice(0, 1).toUpperCase();
+  const positionLabel = user.position ? t(`position.${user.position}`) : "";
+  const deptLabel = (user.department || "").trim();
+  const subline = [positionLabel, deptLabel].filter(Boolean).map(capitalize).join(" · ");
 
   return (
     <header
@@ -114,7 +123,12 @@ export default function Topbar() {
             {firstInitial}
           </span>
         )}
-        <span style={{ fontSize: 12, fontWeight: 500 }}>{user.full_name.split(" ")[0]}</span>
+        <div className="flex flex-col" style={{ lineHeight: 1.1 }}>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{user.full_name.split(" ")[0]}</span>
+          {subline && (
+            <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{subline}</span>
+          )}
+        </div>
       </Link>
       <style>{`
         .kp-topbar-profile:hover { border-color: var(--border-emphasis); background: var(--bg-hover); }

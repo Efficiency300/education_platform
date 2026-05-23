@@ -9,11 +9,13 @@ import {
  ArrowRight,
  CheckCircle2,
  Sparkles,
+ Lock,
  GraduationCap,
 } from "lucide-react";
+import { useEffect } from "react";
 import { useProgress } from "../state/ProgressContext";
 import { useT } from "../state/LocaleContext";
-import { useTranslated } from "../state/TranslationContext";
+import { useTranslated, useTranslation } from "../state/TranslationContext";
 import { CourseSummary } from "../api";
 
 const ICONS: Record<string, any> = {
@@ -26,7 +28,24 @@ const ICONS: Record<string, any> = {
 export default function CoursesPage() {
  const { courses, scenarios } = useProgress();
  const t = useT();
+ const { ensureMany } = useTranslation();
  const scenarioMap = Object.fromEntries(scenarios.map((s) => [s.id, s.title]));
+
+ // Warm the translation cache for everything on this page in one batched
+ // request so the catalog flips to the active locale without N parallel API
+ // calls per card.
+ useEffect(() => {
+   const texts: string[] = [];
+   for (const c of courses) {
+     if (c.title) texts.push(c.title);
+     if (c.subtitle) texts.push(c.subtitle);
+     if (c.description) texts.push(c.description);
+   }
+   for (const s of scenarios) {
+     if (s.title) texts.push(s.title);
+   }
+   ensureMany(texts);
+ }, [courses, scenarios, ensureMany]);
 
  const total = courses.length;
  const completed = courses.filter((c) => c.completed).length;
@@ -86,6 +105,7 @@ function CourseCard({
  const title = useTranslated(course.title);
  const subtitle = useTranslated(course.subtitle);
  const description = useTranslated(course.description);
+ const translatedScenarioTitle = useTranslated(scenarioTitle);
  const Icon = ICONS[course.icon] ?? BookOpen;
  const DIFF: Record<string, { label: string; cls: string }> = {
  easy: { label: t("diff.basic"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
@@ -97,6 +117,8 @@ function CourseCard({
  const doneSteps = course.lessons_completed + (course.completed ? 1 : 0);
  const pct = Math.round((doneSteps / totalSteps) * 100);
 
+ const isLocked = !!course.locked;
+
  return (
  <motion.div
  initial={{ opacity: 0, y: 16 }}
@@ -104,8 +126,14 @@ function CourseCard({
  transition={{ delay: 0.05 * index, type: "spring", stiffness: 220, damping: 22 }}
  >
  <Link
- to={`/courses/${course.slug}`}
- className="glass group flex h-full flex-col gap-5 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-glass-lg"
+ to={isLocked ? "#" : `/courses/${course.slug}`}
+ onClick={(e) => { if (isLocked) e.preventDefault(); }}
+ aria-disabled={isLocked}
+ className={`glass group flex h-full flex-col gap-5 p-6 transition-all duration-300 ${
+ isLocked
+ ? "cursor-not-allowed opacity-60"
+ : "hover:-translate-y-1 hover:shadow-glass-lg"
+ }`}
  >
  <div className="flex items-start justify-between gap-3">
  <div className="flex items-start gap-3">
@@ -119,9 +147,16 @@ function CourseCard({
  <h3 className="mt-1 font-display text-lg font-semibold leading-tight">{title}</h3>
  </div>
  </div>
+ <div className="flex flex-col items-end gap-1">
+ {isLocked && (
+ <span className="inline-flex items-center gap-1 rounded-full bg-navy-900/8 px-2.5 py-0.5 text-[10px] font-semibold text-navy-900/70 dark:bg-white/10 dark:text-white/70">
+ <Lock size={10} /> Заблокирован
+ </span>
+ )}
  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${diff.cls}`}>
  {diff.label}
  </span>
+ </div>
  </div>
 
  <p className="text-sm leading-relaxed text-navy-900/60 dark:text-white/60">
@@ -178,7 +213,7 @@ function CourseCard({
 
  <div className="-mx-6 -mb-6 mt-2 flex items-center justify-between gap-2 rounded-b-2xl border-t border-gold-500/25 bg-gradient-to-r /8 to-transparent px-6 py-3 text-xs">
  <span className="text-navy-900/60 dark:text-white/60">
- {t("courses.afterCourse")} <strong className="text-navy-900 dark:text-white">«{scenarioTitle}»</strong>
+ {t("courses.afterCourse")} <strong className="text-navy-900 dark:text-white">«{translatedScenarioTitle}»</strong>
  </span>
  </div>
  </Link>

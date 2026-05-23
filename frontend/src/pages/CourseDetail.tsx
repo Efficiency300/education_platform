@@ -231,39 +231,14 @@ export default function CourseDetailPage() {
 
  <div className="mt-6 space-y-5">
  {course.quiz.map((q, qi) => (
- <div key={q.id} className="rounded-2xl border border-navy-900/8 bg-white/40 p-5 dark:border-white/8 dark:bg-white/[0.03]">
- <div className="text-[11px] uppercase tracking-wider text-navy-900/50 dark:text-white/50">
- {t("course.questionPrefix")} {qi + 1}
- </div>
- <div className="mt-1 text-base font-semibold">{q.question}</div>
- <div className="mt-3 flex flex-col gap-2">
- {q.options.map((o) => {
- const selected = answers[q.id] === o.id;
- return (
- <button
- key={o.id}
- onClick={() => setAnswers((a) => ({ ...a, [q.id]: o.id }))}
- className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
- selected
- ? "border-gold-500/60 bg-gold-500/10"
- : "border-navy-900/8 bg-white/60 hover:border-gold-500/30 dark:border-white/10 dark:bg-white/5"
- }`}
- >
- <div
- className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
- selected
- ? "border-gold-500 bg-gold-500 text-navy-900"
- : "border-navy-900/20 dark:border-white/25"
- }`}
- >
- {o.id.toUpperCase()}
- </div>
- <span className="leading-relaxed">{o.text}</span>
- </button>
- );
- })}
- </div>
- </div>
+ <QuizQuestion
+ key={q.id}
+ question={q}
+ idx={qi}
+ selected={answers[q.id]}
+ onSelect={(oid) => setAnswers((a) => ({ ...a, [q.id]: oid }))}
+ t={t}
+ />
  ))}
  </div>
 
@@ -394,22 +369,29 @@ export default function CourseDetailPage() {
  );
 }
 
-function CourseHeader({ course }: { course: { title: string; subtitle: string; description: string; lessons: { title: string; body_md: string }[] } }) {
+function CourseHeader({ course }: { course: CourseDetail }) {
   const title = useTranslated(course.title);
   const subtitle = useTranslated(course.subtitle);
   const description = useTranslated(course.description);
   const { ensureMany } = useTranslation();
 
-  // Warm cache for all lesson titles/bodies — the syllabus and active lesson
-  // both render translated copies as soon as they're available.
+  // Warm cache for everything in this course — lessons, quiz questions,
+  // quiz options and explanations — in one batched request.
   useEffect(() => {
     const texts: string[] = [];
     for (const l of course.lessons ?? []) {
       if (l.title) texts.push(l.title);
+      if (l.summary) texts.push(l.summary);
       if (l.body_md) texts.push(l.body_md);
     }
+    for (const q of course.quiz ?? []) {
+      if (q.question) texts.push(q.question);
+      for (const o of q.options ?? []) {
+        if (o.text) texts.push(o.text);
+      }
+    }
     ensureMany(texts);
-  }, [course.lessons, ensureMany]);
+  }, [course, ensureMany]);
 
   return (
     <div>
@@ -449,6 +431,73 @@ function LessonContent({
       </div>
       <LessonAttachmentsView items={lesson.attachments ?? []} />
     </>
+  );
+}
+
+function QuizQuestion({
+  question,
+  idx,
+  selected,
+  onSelect,
+  t,
+}: {
+  question: CourseDetail["quiz"][number];
+  idx: number;
+  selected: string | undefined;
+  onSelect: (optionId: string) => void;
+  t: (k: string, p?: Record<string, string | number>) => string;
+}) {
+  const text = useTranslated(question.question);
+  return (
+    <div className="rounded-2xl border border-navy-900/8 bg-white/40 p-5 dark:border-white/8 dark:bg-white/[0.03]">
+      <div className="text-[11px] uppercase tracking-wider text-navy-900/50 dark:text-white/50">
+        {t("course.questionPrefix")} {idx + 1}
+      </div>
+      <div className="mt-1 text-base font-semibold">{text}</div>
+      <div className="mt-3 flex flex-col gap-2">
+        {question.options.map((o) => (
+          <QuizOption
+            key={o.id}
+            option={o}
+            selected={selected === o.id}
+            onSelect={() => onSelect(o.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QuizOption({
+  option,
+  selected,
+  onSelect,
+}: {
+  option: { id: string; text: string };
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const label = useTranslated(option.text);
+  return (
+    <button
+      onClick={onSelect}
+      className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
+        selected
+          ? "border-gold-500/60 bg-gold-500/10"
+          : "border-navy-900/8 bg-white/60 hover:border-gold-500/30 dark:border-white/10 dark:bg-white/5"
+      }`}
+    >
+      <div
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
+          selected
+            ? "border-gold-500 bg-gold-500 text-navy-900"
+            : "border-navy-900/20 dark:border-white/25"
+        }`}
+      >
+        {option.id.toUpperCase()}
+      </div>
+      <span className="leading-relaxed">{label}</span>
+    </button>
   );
 }
 

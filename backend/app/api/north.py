@@ -66,8 +66,11 @@ class ScenarioOut(BaseModel):
     scenario_uid: str
     name: str
     department: str
+    directions: list[str] = []
+    assigned_user_id: int | None = None
     status: Literal["draft", "published"]
     steps: list[ScenarioStep]
+    course_tags: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -75,13 +78,28 @@ class ScenarioOut(BaseModel):
 class ScenarioCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=255)
     department: str = ""
+    directions: list[str] = []
+    assigned_user_id: int | None = None
     steps: list[ScenarioStep] = []
+    course_tags: list[str] = []
 
 
 class ScenarioUpdateRequest(BaseModel):
     name: str | None = None
     department: str | None = None
+    directions: list[str] | None = None
+    assigned_user_id: int | None = None
     steps: list[ScenarioStep] | None = None
+    course_tags: list[str] | None = None
+
+
+class ScenarioBuildRequest(BaseModel):
+    """Free-form text (or transcribed voice) the admin sends; the LLM turns it
+    into a structured scenario the editor can publish."""
+
+    description: str = Field(min_length=4, max_length=8000)
+    course_tags: list[str] = []
+    name: str | None = None
 
 
 class ScenarioPublishRequest(BaseModel):
@@ -129,21 +147,43 @@ class NorthRespondOut(BaseModel):
 
 
 def _scenario_to_out(s: Scenario) -> ScenarioOut:
+    # ``course_tags`` is stored as a plain attribute on the model if set; older
+    # rows simply don't have it. Pull it off the JSON-ish steps payload as a
+    # convenience for the admin UI.
     return ScenarioOut(
         id=s.id,
         scenario_uid=s.scenario_uid,
         name=s.name,
         department=s.department or "",
+        directions=list(getattr(s, "directions", None) or []),
+        assigned_user_id=getattr(s, "assigned_user_id", None),
         status=s.status or "draft",
         steps=[ScenarioStep.model_validate(step) for step in (s.steps or [])],
+        course_tags=list(getattr(s, "course_tags", None) or []),
         created_at=s.created_at,
         updated_at=s.updated_at,
     )
 
 
 async def _pick_scenario_for_user(db: AsyncSession, user: User) -> Scenario | None:
-    """Pick the published scenario for the user's department, falling back to
-    a general (department='') scenario if nothing matches exactly."""
+    """Pick the scenario the user should run.
+
+    Priority:
+      1. A scenario explicitly bound to this user via ``assigned_user_id``
+         (even if draft — assignments override visibility).
+      2. A published scenario whose ``directions`` overlap with the user's.
+      3. A published scenario whose legacy ``department`` matches.
+      4. A general (department='') scenario as a fallback.
+    """
+    # 1. Direct assignment takes priority.
+    assigned = await db.scalar(
+        select(Scenario)
+        .where(getattr(Scenario, "assigned_user_id", None) == user.id)
+        .order_by(Scenario.updated_at.desc())
+    )
+    if assigned is not None:
+        return assigned
+
     rows = (
         await db.scalars(
             select(Scenario).where(Scenario.status == "published").order_by(Scenario.updated_at.desc())
@@ -151,13 +191,23 @@ async def _pick_scenario_for_user(db: AsyncSession, user: User) -> Scenario | No
     ).all()
     if not rows:
         return None
+
+    user_dirs = {(d or "").strip().lower() for d in (user.directions or []) if d}
     dept = (user.department or "").strip().lower()
     if dept:
+        user_dirs.add(dept)
+
+    if user_dirs:
         for s in rows:
-            if (s.department or "").strip().lower() == dept:
+            s_dirs = {(d or "").strip().lower() for d in (s.directions or []) if d}
+            if s_dirs and (s_dirs & user_dirs):
                 return s
+        for s in rows:
+            if (s.department or "").strip().lower() in user_dirs:
+                return s
+
     for s in rows:
-        if not (s.department or "").strip():
+        if not (s.department or "").strip() and not (s.directions or []):
             return s
     return rows[0]
 
@@ -401,7 +451,10 @@ async def create_scenario(
         scenario_uid=uid,
         name=payload.name,
         department=payload.department,
+        directions=payload.directions,
+        assigned_user_id=payload.assigned_user_id,
         steps=[s.model_dump() for s in payload.steps],
+        course_tags=payload.course_tags,
         status="draft",
         created_by=user.id,
     )
@@ -428,8 +481,14 @@ async def update_scenario(
         scenario.name = payload.name
     if payload.department is not None:
         scenario.department = payload.department
+    if payload.directions is not None:
+        scenario.directions = payload.directions
+    if payload.assigned_user_id is not None:
+        scenario.assigned_user_id = payload.assigned_user_id or None
     if payload.steps is not None:
         scenario.steps = [s.model_dump() for s in payload.steps]
+    if payload.course_tags is not None:
+        scenario.course_tags = payload.course_tags
     await db.commit()
     await db.refresh(scenario)
     return _scenario_to_out(scenario)
@@ -484,6 +543,7 @@ class AssessmentStartOut(BaseModel):
 class AssessmentSubmitRequest(BaseModel):
     questions: list[dict]
     answers: dict[str, str]
+    locale: str | None = None
 
 
 class AssessmentSubmitOut(BaseModel):
@@ -543,12 +603,15 @@ async def _user_catalog(db: AsyncSession, user: User) -> list[dict]:
 
 @router.post("/assess/start", response_model=AssessmentStartOut)
 async def assess_start(
+    locale: str | None = None,
     db: AsyncSession = Depends(get_session),
     user: User = Depends(current_user),
 ):
     """Generate a fresh skill-check tailored to the user. The frontend should
     keep the questions in memory and POST them back to /assess/submit together
     with the answers so the backend can score without a DB round-trip."""
+    from app.ai.llm import translate_text
+
     ctx = {
         "full_name": user.full_name,
         "job_title": user.job_title or "",
@@ -562,8 +625,18 @@ async def assess_start(
         "Я Норс. Давай быстренько проверим, что уже на месте, "
         "чтобы я подобрал курс под твой уровень."
     )
+    questions_out = [q.as_dict() for q in qs]
+    if locale and locale != "ru":
+        intro = await translate_text(intro, target_lang=locale)
+        # Translate the visible question + option text so the picker shows in
+        # the user's UI language. correct_option_id stays the same so scoring
+        # still works on the round trip.
+        for q in questions_out:
+            q["question"] = await translate_text(q.get("question", ""), target_lang=locale)
+            for opt in q.get("options") or []:
+                opt["text"] = await translate_text(opt.get("text", ""), target_lang=locale)
     return AssessmentStartOut(
-        questions=[q.as_dict() for q in qs],
+        questions=questions_out,
         intro=intro,
     )
 
@@ -637,6 +710,11 @@ async def assess_submit(
     )
     await db.commit()
 
+    if payload.locale and payload.locale != "ru":
+        from app.ai.llm import translate_text
+
+        message = await translate_text(message, target_lang=payload.locale)
+
     return AssessmentSubmitOut(
         score=result["score"],
         max=result["max"],
@@ -649,3 +727,126 @@ async def assess_submit(
         } if recommended else None,
         navigate=navigate,
     )
+
+
+# ---------------------------------------------------------------------------
+# AI scenario builder — admin posts free-form text, gets back a draft scenario.
+# ---------------------------------------------------------------------------
+
+
+def _rule_based_scenario(description: str, course_tags: list[str], name: str | None) -> dict:
+    """Deterministic fallback for when no LLM is configured. Splits the
+    description into sentence-sized steps so the admin still gets a usable
+    skeleton they can edit."""
+    import re as _re
+
+    cleaned = _re.sub(r"\s+", " ", description).strip()
+    sentences = [s.strip() for s in _re.split(r"(?<=[.!?])\s+", cleaned) if s.strip()]
+    if not sentences:
+        sentences = [cleaned or "Скажи что-то новенькое, {name}!"]
+    steps: list[dict] = []
+    for i, s in enumerate(sentences[:8]):
+        steps.append(
+            {
+                "id": f"s{i + 1}",
+                "order": i,
+                "north_message": s,
+                "input_type": "none",
+                "choices": [],
+                "correct_answer": None,
+                "north_state": "waiting" if i > 0 else "hyped",
+                "on_complete_state": "celebrating",
+                "content_ref": course_tags[0] if (i == len(sentences) - 1 and course_tags) else None,
+            }
+        )
+    return {
+        "name": name or (sentences[0][:48] if sentences else "Новый сценарий"),
+        "steps": steps,
+    }
+
+
+@admin_router.post(
+    "/build",
+    response_model=ScenarioOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin", "hr"))],
+)
+async def build_scenario(
+    payload: ScenarioBuildRequest,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    """Build a draft scenario from a free-form description (text or voice
+    transcript). Uses the LLM when configured; falls back to a deterministic
+    splitter otherwise."""
+    from app.ai.llm import chat_completion  # local to avoid cycles
+    from app.core.config import settings as cfg
+
+    built: dict
+    if cfg.llm_provider != "mock":
+        import json as _json
+
+        prompt = (
+            "Ты — методист онбординга. По описанию ниже собери сценарий, по "
+            "которому маскот Норс ведёт новичка. Верни строго JSON следующей "
+            "формы:\n"
+            '{"name": "...", "steps": [{"id": "s1", "order": 0, "north_message": "Привет, {name}!", '
+            '"input_type": "none|text|choice", "choices": ["..."], "correct_answer": null, '
+            '"north_state": "idle|thinking|waiting|listening|hyped|celebrating|surprised", '
+            '"on_complete_state": "celebrating", "content_ref": null}]}\n'
+            "Правила: 3–7 шагов; {name} подставится автоматически; для шагов "
+            "с вариантами заполни choices и correct_answer; для перехода к курсу "
+            "из тегов укажи его slug в content_ref. Никакого markdown — только JSON.\n\n"
+            f"Описание: {payload.description}\n"
+            f"Связанные курсы (slug): {', '.join(payload.course_tags) or '—'}"
+        )
+        try:
+            raw = await chat_completion(prompt)
+            # Strip code fences if the model added them.
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.strip("`")
+                if cleaned.lower().startswith("json"):
+                    cleaned = cleaned[4:]
+            data = _json.loads(cleaned)
+            if not isinstance(data, dict) or not isinstance(data.get("steps"), list):
+                raise ValueError("bad shape")
+            built = data
+            if payload.name and not built.get("name"):
+                built["name"] = payload.name
+        except Exception:
+            built = _rule_based_scenario(payload.description, payload.course_tags, payload.name)
+    else:
+        built = _rule_based_scenario(payload.description, payload.course_tags, payload.name)
+
+    # Validate / coerce steps via the existing pydantic model.
+    safe_steps: list[ScenarioStep] = []
+    for i, step in enumerate(built.get("steps") or []):
+        if not isinstance(step, dict):
+            continue
+        step.setdefault("id", f"s{i + 1}")
+        step.setdefault("order", i)
+        try:
+            safe_steps.append(ScenarioStep.model_validate(step))
+        except Exception:
+            continue
+    if not safe_steps:
+        # As a last resort, fall back to the rule-based skeleton.
+        built = _rule_based_scenario(payload.description, payload.course_tags, payload.name)
+        safe_steps = [ScenarioStep.model_validate(s) for s in built["steps"]]
+
+    uid = f"sc-{int(datetime.utcnow().timestamp())}-{secrets.token_hex(3)}"
+    scenario = Scenario(
+        scenario_uid=uid,
+        name=built.get("name") or payload.name or "Новый сценарий",
+        department="",
+        directions=[],
+        course_tags=list(payload.course_tags or []),
+        steps=[s.model_dump() for s in safe_steps],
+        status="draft",
+        created_by=user.id,
+    )
+    db.add(scenario)
+    await db.commit()
+    await db.refresh(scenario)
+    return _scenario_to_out(scenario)

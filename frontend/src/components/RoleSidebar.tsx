@@ -9,9 +9,9 @@ import {
   Trophy,
   Settings,
   FileText,
-  LogOut,
   UsersRound,
   Compass,
+  UserCircle2,
 } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
 import { useProgress } from "../state/ProgressContext";
@@ -21,7 +21,7 @@ import LanguageSwitcher from "./LanguageSwitcher";
 type NavItem = { to: string; label: string; icon: any; end?: boolean };
 
 export default function RoleSidebar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { gamification, progress } = useProgress();
   const t = useT();
   if (!user) return null;
@@ -32,15 +32,17 @@ export default function RoleSidebar() {
       { to: "/courses", label: t("nav.courses"), icon: BookOpen },
       { to: "/simulator", label: t("nav.simulator"), icon: Gamepad2 },
       { to: "/chat", label: t("nav.assistant"), icon: MessagesSquare },
-      { to: "/teams", label: t("nav.teams"), icon: UsersRound },
+      { to: "/teams", label: t("nav.teamChat"), icon: UsersRound },
       { to: "/progress", label: t("nav.progress"), icon: TrendingUp },
+      { to: "/profile", label: t("nav.profile"), icon: UserCircle2 },
     ],
     hr: [
       { to: "/hr", label: t("hr.dashboard"), icon: LayoutDashboard, end: true },
       { to: "/hr/team", label: t("nav.team"), icon: Users },
-      { to: "/teams", label: t("nav.teams"), icon: UsersRound },
-      { to: "/chat", label: t("nav.assistant"), icon: MessagesSquare },
+      // HR review all team group chats (not the AI assistant chats).
+      { to: "/teams", label: t("nav.teamChat"), icon: UsersRound },
       { to: "/hr/leaderboard", label: t("nav.leaderboard"), icon: Trophy },
+      { to: "/profile", label: t("nav.profile"), icon: UserCircle2 },
     ],
     admin: [
       { to: "/admin", label: t("nav.overview"), icon: LayoutDashboard, end: true },
@@ -48,9 +50,10 @@ export default function RoleSidebar() {
       { to: "/admin/north-scenarios", label: t("nav.northScenarios"), icon: Compass },
       { to: "/admin/regulations", label: t("nav.knowledge"), icon: FileText },
       { to: "/admin/users", label: t("nav.users"), icon: Users },
-      { to: "/teams", label: t("nav.teams"), icon: UsersRound },
+      { to: "/teams", label: t("nav.teamChat"), icon: UsersRound },
       { to: "/chat", label: t("nav.assistant"), icon: MessagesSquare },
       { to: "/admin/settings", label: t("nav.settings"), icon: Settings },
+      { to: "/profile", label: t("nav.profile"), icon: UserCircle2 },
     ],
   };
   const nav = navByRole[user.role] ?? navByRole.user;
@@ -71,11 +74,18 @@ export default function RoleSidebar() {
         className="flex items-center"
         style={{ padding: "20px 16px 18px", borderBottom: "0.5px solid var(--border)" }}
       >
-        <img
-          src="/logo-full.svg"
-          alt="KOMPAS"
-          style={{ height: 30, width: "auto", display: "block" }}
-        />
+        <NavLink
+          to={user.role === "admin" ? "/admin" : user.role === "hr" ? "/hr" : "/"}
+          end
+          aria-label="KOMPAS"
+          style={{ display: "block", cursor: "pointer" }}
+        >
+          <img
+            src="/logo-full.svg"
+            alt="KOMPAS"
+            style={{ height: 30, width: "auto", display: "block" }}
+          />
+        </NavLink>
       </div>
 
       {/* Nav */}
@@ -131,7 +141,15 @@ export default function RoleSidebar() {
           }}
         >
           <div className="flex items-center justify-between">
-            <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 500 }}>
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--text-secondary)",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
               {t("dash.overall")}
             </span>
             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--brand)" }}>
@@ -161,66 +179,6 @@ export default function RoleSidebar() {
         }}
       >
         <LanguageSwitcher />
-
-        <div
-          className="flex items-center gap-2.5"
-          style={{
-            background: "var(--bg-card)",
-            border: "0.5px solid var(--border)",
-            borderRadius: "var(--radius-md)",
-            padding: 8,
-          }}
-        >
-          <div
-            className="flex items-center justify-center shrink-0"
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: "50%",
-              background: "var(--brand)",
-              color: "#FFFFFF",
-              fontSize: 11,
-              fontWeight: 700,
-              fontFamily: "var(--font-kompas)",
-            }}
-          >
-            {user.full_name.slice(0, 1).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div
-              className="truncate"
-              style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}
-            >
-              {user.full_name}
-            </div>
-            <div
-              className="truncate"
-              style={{ fontSize: 10, color: "var(--text-tertiary)" }}
-            >
-              {user.email}
-            </div>
-          </div>
-          <button
-            onClick={logout}
-            title={t("profile.logout")}
-            aria-label={t("profile.logout")}
-            className="kp-logout"
-            style={{
-              padding: 6,
-              borderRadius: "var(--radius-sm)",
-              background: "transparent",
-              border: "none",
-              color: "var(--text-tertiary)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <LogOut size={13} />
-          </button>
-          <style>{`
-            .kp-logout:hover { color: var(--danger); background: rgba(240,62,62,0.08); }
-          `}</style>
-        </div>
       </div>
     </aside>
   );

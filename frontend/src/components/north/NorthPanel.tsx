@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { RotateCw, Sparkles, X } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
 import { useT } from "../../state/LocaleContext";
+import { useTranslated } from "../../state/TranslationContext";
 import NorthAssessment from "./NorthAssessment";
 import NorthBubble from "./NorthBubble";
 import NorthInput from "./NorthInput";
@@ -34,20 +35,29 @@ export default function NorthPanel() {
       style={{
         width: 320,
         flexShrink: 0,
-        background: "var(--bg-elevated)",
-        borderLeft: "0.5px solid var(--border)",
-        padding: "24px 20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
         position: "sticky",
-        top: 52,
+        top: 0,
         alignSelf: "flex-start",
-        height: "calc(100vh - 52px)",
-        overflowY: "auto",
+        // Parent <main> already insets by pt-8/pb-12; fill what remains.
+        height: "calc(100vh - 52px - 32px - 48px)",
       }}
     >
-      <NorthInner />
+      <div
+        style={{
+          height: "100%",
+          background: "var(--bg-elevated)",
+          border: "0.5px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "24px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
+        <NorthInner />
+      </div>
     </aside>
   );
 }
@@ -199,7 +209,42 @@ function NorthInner() {
   }
 
   // ----- active step ------------------------------------------------------
-  const messageWithName = currentStep.north_message.replace(/\{name\}/g, firstName || "friend");
+  return (
+    <ActiveStep
+      currentStep={currentStep}
+      firstName={firstName}
+      state={state}
+      isTyping={isTyping}
+      busy={busy}
+      progress={progress}
+      onBubbleDone={onBubbleDone}
+      submit={submit}
+    />
+  );
+}
+
+/** Active-step renderer; split out so we can hook useTranslated per step. */
+function ActiveStep(props: {
+  currentStep: NonNullable<ReturnType<typeof useNorth>["currentStep"]>;
+  firstName: string;
+  state: ReturnType<typeof useNorth>["state"];
+  isTyping: boolean;
+  busy: boolean;
+  progress: NonNullable<ReturnType<typeof useNorth>["progress"]>;
+  onBubbleDone: ReturnType<typeof useNorth>["onBubbleDone"];
+  submit: ReturnType<typeof useNorth>["submit"];
+}) {
+  const t = useT();
+  const { currentStep, firstName, state, isTyping, busy, progress, onBubbleDone, submit } = props;
+  // Translate the scenario message into the user's UI language before
+  // substituting the name placeholder.
+  const translatedMessage = useTranslated(currentStep.north_message);
+  const messageWithName = translatedMessage.replace(/\{name\}/g, firstName || "friend");
+  // Translate choice labels too so multilingual users see the picker in
+  // their language.
+  const translatedChoices = (currentStep.choices ?? []).map((c) => ({
+    raw: c,
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -224,7 +269,7 @@ function NorthInner() {
 
       <NorthInputWithLabels
         type={currentStep.input_type}
-        choices={currentStep.choices}
+        choices={translatedChoices.map((c) => c.raw)}
         hidden={isTyping}
         disabled={busy}
         onSubmit={submit}

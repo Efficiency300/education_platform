@@ -56,6 +56,9 @@ class TeamMemberOut(BaseModel):
     job_title: str
     avatar_url: str
     seniority: Literal["newcomer", "member", "senior"]
+    role: str = "user"
+    position: str = "intern"
+    department: str = ""
 
 
 class TeamMembershipUpdate(BaseModel):
@@ -70,6 +73,10 @@ class TeamMessageOut(BaseModel):
     author_name: str
     author_avatar: str
     author_seniority: Literal["newcomer", "member", "senior"]
+    # Job context shown next to each message in the chat UI.
+    author_role: str = "user"
+    author_position: str = "intern"
+    author_job_title: str = ""
     content: str
     kind: Literal["message", "question"]
     canonical: bool
@@ -278,6 +285,9 @@ async def team_members(
             job_title=users_by_id[r.user_id].job_title if r.user_id in users_by_id else "",
             avatar_url=users_by_id[r.user_id].avatar_url if r.user_id in users_by_id else "",
             seniority=r.seniority,  # type: ignore[arg-type]
+            role=users_by_id[r.user_id].role if r.user_id in users_by_id else "user",
+            position=users_by_id[r.user_id].position if r.user_id in users_by_id else "intern",
+            department=users_by_id[r.user_id].department if r.user_id in users_by_id else "",
         )
         for r in rows
     ]
@@ -397,6 +407,9 @@ async def list_messages(
             )
         ).all()
     }
+    visible = [
+        r for r in rows if not getattr(r, "deleted", False)
+    ]
     return [
         TeamMessageOut(
             id=r.id,
@@ -405,13 +418,16 @@ async def list_messages(
             author_name=authors[r.author_id].full_name if r.author_id in authors else "—",
             author_avatar=authors[r.author_id].avatar_url if r.author_id in authors else "",
             author_seniority=memberships.get(r.author_id, "member"),  # type: ignore[arg-type]
+            author_role=authors[r.author_id].role if r.author_id in authors else "user",
+            author_position=authors[r.author_id].position if r.author_id in authors else "intern",
+            author_job_title=authors[r.author_id].job_title if r.author_id in authors else "",
             content=r.content,
             kind=r.kind,  # type: ignore[arg-type]
             canonical=r.canonical,
             knowledge_filename=r.knowledge_filename,
             created_at=r.created_at,
         )
-        for r in rows
+        for r in visible
     ]
 
 
@@ -451,12 +467,43 @@ async def post_message(
         author_name=user.full_name,
         author_avatar=user.avatar_url,
         author_seniority=membership.seniority,  # type: ignore[arg-type]
+        author_role=user.role,
+        author_position=user.position,
+        author_job_title=user.job_title or "",
         content=msg.content,
         kind=msg.kind,  # type: ignore[arg-type]
         canonical=msg.canonical,
         knowledge_filename=msg.knowledge_filename,
         created_at=msg.created_at,
     )
+
+
+@router.delete(
+    "/teams/{team_id}/messages/{message_id}",
+    dependencies=[Depends(require_role("admin"))],
+)
+async def delete_team_message(
+    team_id: int,
+    message_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    """Soft-delete a team message (admin only). The row stays for audit."""
+    msg = await db.get(TeamMessage, message_id)
+    if not msg or msg.team_id != team_id:
+        raise HTTPException(404, "Сообщение не найдено")
+    msg.deleted = True
+    msg.deleted_by = user.id
+    # If the message was already promoted to the knowledge base, remove the
+    # backing markdown file so the AI assistant stops citing it.
+    if msg.knowledge_filename:
+        try:
+            (settings.regulations_path / msg.knowledge_filename).unlink(missing_ok=True)
+            rag_index.load_dir(settings.regulations_path)
+        except Exception:
+            pass
+    await db.commit()
+    return {"deleted": True}
 
 
 @router.post("/teams/{team_id}/messages/{message_id}/canonical")

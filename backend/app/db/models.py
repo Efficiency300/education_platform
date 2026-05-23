@@ -16,6 +16,10 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), default="user")  # user | hr | admin
     position: Mapped[str] = mapped_column(String(64), default="intern")  # intern | employee
     department: Mapped[str] = mapped_column(String(128), default="")
+    # Multi-direction membership. ``department`` is kept as the user's primary
+    # direction (for legacy code); ``directions`` is the authoritative list
+    # used for course / scenario / file visibility.
+    directions: Mapped[list | None] = mapped_column(JSON, default=list)
     program: Mapped[str] = mapped_column(String(128), default="")
     # Free-form job grade — set by admin (e.g. "Senior Developer", "QA Lead").
     job_title: Mapped[str] = mapped_column(String(128), default="")
@@ -38,6 +42,11 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(16))  # user | assistant
     content: Mapped[str] = mapped_column(Text)
     sources: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Admin soft-delete: keeps the row for audit while hiding it from the UI.
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -120,6 +129,12 @@ class CustomCourse(Base):
     estimated_minutes: Mapped[int] = mapped_column(Integer, default=10)
     target_scenario_id: Mapped[str] = mapped_column(String(64), default="")
     tags: Mapped[list | None] = mapped_column(JSON, default=list)
+    # Directions (departments) this course is visible to. Empty = visible to all.
+    directions: Mapped[list | None] = mapped_column(JSON, default=list)
+    # Locks the course until ``prerequisite_slug`` has been completed.
+    prerequisite_slug: Mapped[str] = mapped_column(String(128), default="")
+    # Ordering used by the catalog page (low number first).
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
     lessons: Mapped[list | None] = mapped_column(JSON, default=list)
     quiz: Mapped[list | None] = mapped_column(JSON, default=list)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -203,10 +218,15 @@ class TeamMessage(Base):
     # Once promoted to the knowledge base, store the resulting filename so we
     # can avoid duplicates and remove the file if the message is deleted.
     knowledge_filename: Mapped[str] = mapped_column(String(255), default="")
+    # Admin soft-delete: keeps the row for audit while hiding it from the UI.
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     team: Mapped["Team"] = relationship(back_populates="messages")
-    author: Mapped["User"] = relationship()
+    author: Mapped["User"] = relationship(foreign_keys=[author_id])
 
 
 # ---------------------------------------------------------------------------
@@ -287,9 +307,19 @@ class Scenario(Base):
     scenario_uid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     department: Mapped[str] = mapped_column(String(128), default="")
+    # Multi-direction targeting. If non-empty, the scenario is visible to any
+    # user whose ``directions`` list intersects with this one.
+    directions: Mapped[list | None] = mapped_column(JSON, default=list)
+    # If set, the scenario is bound to one specific user (admin-driven 1:1
+    # assignment) — overrides direction matching.
+    assigned_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # "draft" | "published" — only published scenarios are visible to newcomers.
     status: Mapped[str] = mapped_column(String(16), default="draft")
     steps: Mapped[list | None] = mapped_column(JSON, default=list)
+    # Slugs of courses tagged onto this scenario (admin "tag related courses").
+    course_tags: Mapped[list | None] = mapped_column(JSON, default=list)
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -324,6 +354,52 @@ class UserScenarioProgress(Base):
 # ---------------------------------------------------------------------------
 
 
+class Direction(Base):
+    """Admin-managed list of "directions" (departments / functional areas).
+
+    Used as the source of truth for the multi-select pickers wherever a
+    direction is needed: user profile, course visibility, scenario targeting,
+    knowledge files."""
+
+    __tablename__ = "directions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class KnowledgeInstruction(Base):
+    """An AI-auto-detected instruction promoted into the knowledge base.
+
+    When the AI assistant produces an answer that looks like a reusable
+    instruction, we keep a row here so admins can review / verify the source
+    and delete it from the knowledge base if needed."""
+
+    __tablename__ = "knowledge_instructions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    # JSON list of source citations (url, title, snippet) used to corroborate.
+    sources: Mapped[list | None] = mapped_column(JSON, default=list)
+    # "verified" if at least one trusted source confirmed; "unverified" otherwise.
+    verification_status: Mapped[str] = mapped_column(String(32), default="unverified")
+    verification_notes: Mapped[str] = mapped_column(Text, default="")
+    # Backing markdown file in the knowledge base.
+    knowledge_filename: Mapped[str] = mapped_column(String(255), default="")
+    # Original chat message ids (free-form so AI/team flows can both feed it).
+    origin: Mapped[str] = mapped_column(String(64), default="chat")
+    origin_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    direction: Mapped[str] = mapped_column(String(128), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class KnowledgeFile(Base):
     __tablename__ = "knowledge_files"
 
@@ -332,6 +408,8 @@ class KnowledgeFile(Base):
     # Free-form direction / department this file belongs to ("Backend", "HR"…).
     # Empty string means "general / unclassified".
     direction: Mapped[str] = mapped_column(String(128), default="", index=True)
+    # Multi-direction tagging. Authoritative list; ``direction`` kept for legacy.
+    directions: Mapped[list | None] = mapped_column(JSON, default=list)
     title: Mapped[str] = mapped_column(String(255), default="")
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     content_type: Mapped[str] = mapped_column(String(128), default="")

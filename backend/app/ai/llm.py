@@ -38,6 +38,28 @@ SYSTEM_PROMPT = (
 )
 
 
+_LANG_LABELS: dict[str, str] = {
+    "ru": "русском",
+    "uz": "узбекском (oʻzbekcha, латиница)",
+    "en": "английском",
+}
+
+
+def _with_locale(system: str, locale: str | None) -> str:
+    """Append a single, hard rule about the answer language so the LLM doesn't
+    fall back to the language of the user's question or of the source material."""
+    if not locale:
+        return system
+    label = _LANG_LABELS.get(locale)
+    if not label:
+        return system
+    return (
+        f"{system}\n\n"
+        f"ВАЖНО: отвечай строго на {label} языке, "
+        "даже если вопрос или фрагменты базы знаний на другом языке."
+    )
+
+
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 
@@ -183,21 +205,27 @@ async def chat_completion(prompt: str, *, system: str | None = None,
     return ""
 
 
-async def generate_answer(question: str, chunks: list[tuple[Chunk, float]]) -> str:
+async def generate_answer(
+    question: str,
+    chunks: list[tuple[Chunk, float]],
+    *,
+    locale: str | None = None,
+) -> str:
     user_msg = (
         f"Фрагменты базы знаний:\n\n{_build_context(chunks)}\n\n"
         f"Вопрос сотрудника: {question}"
     )
+    system = _with_locale(SYSTEM_PROMPT, locale)
     if settings.gemini_api_key:
         try:
-            text = await _gemini_generate(user_msg, system=SYSTEM_PROMPT, max_tokens=600)
+            text = await _gemini_generate(user_msg, system=system, max_tokens=600)
             if text:
                 return text
         except Exception:
             log.exception("Gemini answer failed; falling back")
     if settings.anthropic_api_key:
         try:
-            text = await _anthropic_generate(user_msg, system=SYSTEM_PROMPT)
+            text = await _anthropic_generate(user_msg, system=system)
             if text:
                 return text
         except Exception:
@@ -205,14 +233,20 @@ async def generate_answer(question: str, chunks: list[tuple[Chunk, float]]) -> s
     return _mock_answer(question, chunks)
 
 
-async def stream_answer(question: str, chunks: list[tuple[Chunk, float]]) -> AsyncIterator[str]:
+async def stream_answer(
+    question: str,
+    chunks: list[tuple[Chunk, float]],
+    *,
+    locale: str | None = None,
+) -> AsyncIterator[str]:
     user_msg = (
         f"Фрагменты базы знаний:\n\n{_build_context(chunks)}\n\n"
         f"Вопрос сотрудника: {question}"
     )
+    system = _with_locale(SYSTEM_PROMPT, locale)
     if settings.gemini_api_key:
         try:
-            async for chunk in _gemini_stream(user_msg, system=SYSTEM_PROMPT):
+            async for chunk in _gemini_stream(user_msg, system=system):
                 yield chunk
             return
         except Exception:
@@ -225,7 +259,7 @@ async def stream_answer(question: str, chunks: list[tuple[Chunk, float]]) -> Asy
             async with client.messages.stream(
                 model=settings.llm_model,
                 max_tokens=600,
-                system=SYSTEM_PROMPT,
+                system=system,
                 messages=[{"role": "user", "content": user_msg}],
             ) as stream:
                 async for text in stream.text_stream:

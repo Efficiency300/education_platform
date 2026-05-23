@@ -29,6 +29,7 @@ from app.api import (
     teams,
     flows,
     north,
+    directions,
 )
 
 setup_logging()
@@ -392,5 +393,6 @@ for router in (
     flows.admin_router,
     north.router,
     north.admin_router,
+    directions.router,
 ):
     app.include_router(router, prefix="/api")

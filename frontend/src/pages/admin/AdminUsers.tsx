@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Shield, ShieldCheck, User as UserIcon, Plus, X } from "lucide-react";
+import { Search, Shield, ShieldCheck, User as UserIcon, Plus, Trash2, X } from "lucide-react";
 import { api, AdminUser, AdminUserCreate, Role } from "../../api";
 import GlassCard from "../../components/GlassCard";
+import DirectionsPicker from "../../components/DirectionsPicker";
 import { useAuth } from "../../state/AuthContext";
 import { useT } from "../../state/LocaleContext";
 
@@ -48,6 +49,31 @@ export default function AdminUsers() {
     }
   };
 
+  const onDelete = async (uid: number, name: string) => {
+    if (!confirm(`${t("admin.users.confirmDelete")} «${name}»`)) return;
+    setBusyId(uid);
+    try {
+      await api.adminDeleteUser(uid);
+      load();
+    } catch (e: any) {
+      alert(e?.detail || e?.message || t("admin.courses.deleteFailed"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onDirections = async (uid: number, directions: string[]) => {
+    setBusyId(uid);
+    try {
+      await api.adminUpdateUser(uid, { directions });
+      load();
+    } catch (e: any) {
+      alert(e?.detail || e?.message || t("admin.courses.deleteFailed"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -81,7 +107,7 @@ export default function AdminUsers() {
 
       <GlassCard className="!p-0 overflow-hidden">
         <div
-          className="grid grid-cols-[1.5fr_1fr_1fr_160px] items-center gap-4 px-6 py-3"
+          className="grid grid-cols-[1.4fr_1fr_1.4fr_140px_120px] items-center gap-4 px-6 py-3"
           style={{
             borderBottom: "0.5px solid var(--border)",
             background: "var(--bg-elevated)",
@@ -94,8 +120,9 @@ export default function AdminUsers() {
         >
           <div>{t("admin.users.colEmployee")}</div>
           <div>{t("admin.users.colDept")}</div>
-          <div>{t("admin.users.colCreated")}</div>
+          <div>{t("admin.users.directions")}</div>
           <div>{t("admin.users.colRole")}</div>
+          <div className="text-right">{t("admin.courses.colActions")}</div>
         </div>
         <div>
           {filtered.map((u, i) => {
@@ -105,7 +132,7 @@ export default function AdminUsers() {
             return (
               <div
                 key={u.id}
-                className="grid grid-cols-[1.5fr_1fr_1fr_160px] items-center gap-4 px-6 py-3"
+                className="grid grid-cols-[1.4fr_1fr_1.4fr_140px_120px] items-center gap-4 px-6 py-3"
                 style={{
                   borderTop: i === 0 ? "none" : "0.5px solid var(--border)",
                   color: "var(--text-primary)",
@@ -138,8 +165,13 @@ export default function AdminUsers() {
                   <div>{u.department || "—"}</div>
                   <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{u.position}</div>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-                  {new Date(u.created_at).toLocaleDateString("ru-RU")}
+                <div>
+                  <DirectionsPicker
+                    value={u.directions ?? []}
+                    onChange={(next) => onDirections(u.id, next)}
+                    placeholder="—"
+                    disabled={busyId === u.id}
+                  />
                 </div>
                 <div>
                   <div
@@ -168,6 +200,29 @@ export default function AdminUsers() {
                     <option value="hr">hr</option>
                     <option value="admin">admin</option>
                   </select>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={busyId === u.id || isSelf}
+                    onClick={() => onDelete(u.id, u.full_name)}
+                    title={isSelf ? t("admin.users.cantDemote") : t("admin.users.delete")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "6px 10px",
+                      fontSize: 12,
+                      background: "transparent",
+                      border: "0.5px solid var(--border)",
+                      borderRadius: "var(--radius-sm)",
+                      color: "var(--text-secondary)",
+                      cursor: isSelf ? "not-allowed" : "pointer",
+                      opacity: isSelf ? 0.3 : 1,
+                    }}
+                  >
+                    <Trash2 size={12} /> {t("admin.users.delete")}
+                  </button>
                 </div>
               </div>
             );
@@ -210,6 +265,7 @@ function CreateUserModal({
     role: "user",
     position: "intern",
     department: "",
+    directions: [],
     program: "",
   });
   const [busy, setBusy] = useState(false);
@@ -357,10 +413,18 @@ function CreateUserModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label style={labelStyle}>{t("auth.register.department")}</label>
-            <input
-              value={form.department ?? ""}
-              onChange={(e) => upd("department", e.target.value)}
-              className="input"
+            <DirectionsPicker
+              value={form.directions ?? []}
+              onChange={(next) => {
+                setForm((f) => ({
+                  ...f,
+                  directions: next,
+                  // Keep ``department`` in sync with the primary direction so
+                  // legacy filters that still read the column behave.
+                  department: next[0] ?? "",
+                }));
+              }}
+              placeholder="—"
             />
           </div>
           <div>

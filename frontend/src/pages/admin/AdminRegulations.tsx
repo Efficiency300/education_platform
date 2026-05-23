@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Filter, FileText, Pencil, Trash2, Upload, X } from "lucide-react";
+import { Check, Filter, FileText, Pencil, Trash2, Upload } from "lucide-react";
 import { api, AdminRegulation } from "../../api";
 import GlassCard from "../../components/GlassCard";
+import DirectionsPicker from "../../components/DirectionsPicker";
 import { useT } from "../../state/LocaleContext";
 
 export default function AdminRegulations() {
@@ -9,7 +10,10 @@ export default function AdminRegulations() {
   const [items, setItems] = useState<AdminRegulation[]>([]);
   const [directions, setDirections] = useState<string[]>([]);
   const [filterDir, setFilterDir] = useState<string>("");
-  const [uploadDir, setUploadDir] = useState<string>("");
+  // Multi-select: when the admin uploads a file we let them tag it with
+  // several directions at once. The first selected one becomes the legacy
+  // single ``direction`` column for backwards-compat.
+  const [uploadDirs, setUploadDirs] = useState<string[]>([]);
   const [ragChunks, setRagChunks] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -17,13 +21,18 @@ export default function AdminRegulations() {
 
   const load = useCallback(async () => {
     try {
-      const [regs, dirs, stats] = await Promise.all([
+      const [regs, dirs, adminDirs, stats] = await Promise.all([
         api.adminRegulations(filterDir || undefined),
         api.adminRegulationDirections(),
+        api.listDirections().catch(() => []),
         api.adminStats(),
       ]);
       setItems(regs);
-      setDirections(dirs.directions);
+      // Merge: directions admin curates + directions inferred from existing
+      // files. Curated names win when both have the same string.
+      const merged = new Set<string>(dirs.directions);
+      for (const d of adminDirs) merged.add(d.name);
+      setDirections([...merged].sort());
       setRagChunks(stats.rag_chunks);
     } catch (e: any) {
       setErr(e?.detail || e?.message || "—");
@@ -38,7 +47,13 @@ export default function AdminRegulations() {
     setBusy(true);
     setErr(null);
     try {
-      const res = await api.adminUploadRegulation(file, uploadDir.trim());
+      const primary = uploadDirs[0] ?? "";
+      const res = await api.adminUploadRegulation(file, primary);
+      // Sync the rest of the multi-select via the PATCH endpoint so the file
+      // ends up tagged with every direction the admin picked.
+      if (uploadDirs.length > 1) {
+        await api.adminPatchRegulationDirections(res.filename, uploadDirs);
+      }
       setRagChunks(res.rag_chunks);
       await load();
     } catch (e: any) {
@@ -126,18 +141,11 @@ export default function AdminRegulations() {
             >
               {t("admin.regs.direction")}
             </label>
-            <input
-              list="kb-directions"
-              value={uploadDir}
-              onChange={(e) => setUploadDir(e.target.value)}
+            <DirectionsPicker
+              value={uploadDirs}
+              onChange={setUploadDirs}
               placeholder={t("admin.regs.directionPh")}
-              className="input"
             />
-            <datalist id="kb-directions">
-              {allDirections.map((d) => (
-                <option key={d} value={d} />
-              ))}
-            </datalist>
           </div>
 
           <input
@@ -229,7 +237,14 @@ export default function AdminRegulations() {
               row={r}
               first={i === 0}
               allDirections={allDirections}
-              onSetDirection={(d) => setDirection(r.filename, d)}
+              onSetDirections={async (ds) => {
+                try {
+                  await api.adminPatchRegulationDirections(r.filename, ds);
+                  await load();
+                } catch (e: any) {
+                  setErr(e?.detail || e?.message || "—");
+                }
+              }}
               onDelete={() => onDelete(r.filename)}
             />
           ))}
@@ -248,18 +263,24 @@ function FileRow({
   row,
   first,
   allDirections,
-  onSetDirection,
+  onSetDirections,
   onDelete,
 }: {
   row: AdminRegulation;
   first: boolean;
   allDirections: string[];
-  onSetDirection: (direction: string) => void;
+  onSetDirections: (directions: string[]) => void;
   onDelete: () => void;
 }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(row.direction ?? "");
+  void allDirections;
+  const currentDirections =
+    row.directions && row.directions.length > 0
+      ? row.directions
+      : row.direction
+      ? [row.direction]
+      : [];
 
   return (
     <div
@@ -283,45 +304,17 @@ function FileRow({
       <div>
         {editing ? (
           <div className="flex items-center gap-1">
-            <input
-              list={`row-dirs-${row.filename}`}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              autoFocus
-              className="input"
-              style={{ padding: "4px 8px", fontSize: 12 }}
-            />
-            <datalist id={`row-dirs-${row.filename}`}>
-              {allDirections.map((d) => (
-                <option key={d} value={d} />
-              ))}
-            </datalist>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <DirectionsPicker
+                value={currentDirections}
+                onChange={(next) => {
+                  onSetDirections(next);
+                }}
+                placeholder={t("admin.regs.unassigned")}
+              />
+            </div>
             <button
-              onClick={() => {
-                onSetDirection(draft.trim());
-                setEditing(false);
-              }}
-              aria-label={t("common.save_changes")}
-              style={{
-                width: 24,
-                height: 24,
-                background: "var(--brand)",
-                color: "#FFFFFF",
-                border: "none",
-                borderRadius: "var(--radius-sm)",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Check size={12} />
-            </button>
-            <button
-              onClick={() => {
-                setDraft(row.direction ?? "");
-                setEditing(false);
-              }}
+              onClick={() => setEditing(false)}
               aria-label={t("common.cancel")}
               style={{
                 width: 24,
@@ -336,28 +329,32 @@ function FileRow({
                 justifyContent: "center",
               }}
             >
-              <X size={12} />
+              <Check size={12} />
             </button>
           </div>
         ) : (
           <button
             onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1"
+            className="inline-flex items-center gap-1 flex-wrap"
             style={{
               padding: "3px 10px",
               borderRadius: 99,
-              background: row.direction ? "var(--brand-subtle)" : "var(--bg-card)",
-              border: row.direction
-                ? "0.5px solid var(--border-brand)"
-                : "0.5px dashed var(--border-emphasis)",
-              color: row.direction ? "var(--brand)" : "var(--text-tertiary)",
+              background:
+                currentDirections.length > 0 ? "var(--brand-subtle)" : "var(--bg-card)",
+              border:
+                currentDirections.length > 0
+                  ? "0.5px solid var(--border-brand)"
+                  : "0.5px dashed var(--border-emphasis)",
+              color: currentDirections.length > 0 ? "var(--brand)" : "var(--text-tertiary)",
               fontSize: 11,
               fontWeight: 500,
               cursor: "pointer",
             }}
           >
             <Pencil size={10} />
-            {row.direction || t("admin.regs.unassigned")}
+            {currentDirections.length > 0
+              ? currentDirections.join(", ")
+              : t("admin.regs.unassigned")}
           </button>
         )}
       </div>

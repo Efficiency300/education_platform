@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, ShieldCheck, Sparkles, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
 import { useT } from "../state/LocaleContext";
 import { LanguageInline } from "../components/LanguageSwitcher";
@@ -94,16 +94,6 @@ export default function LoginPage() {
           >
             {t("auth.login.heroDesc")}
           </p>
-          <ul className="space-y-2.5" style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-            <li className="flex items-center gap-2">
-              <ShieldCheck size={16} style={{ color: "var(--brand)" }} />
-              {t("auth.login.heroBullet1")}
-            </li>
-            <li className="flex items-center gap-2">
-              <Sparkles size={16} style={{ color: "var(--brand)" }} />
-              {t("auth.login.heroBullet2")}
-            </li>
-          </ul>
         </div>
 
         <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>

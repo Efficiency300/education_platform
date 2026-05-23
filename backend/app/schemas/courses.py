@@ -14,11 +14,19 @@ class CourseSummary(BaseModel):
     tags: list[str]
     lessons_count: int
     quiz_count: int
+    # Directions (departments) this course is visible to; empty = all.
+    directions: list[str] = []
+    # Slug of the course that must be completed before this one unlocks.
+    prerequisite_slug: str = ""
+    # Catalog display order (low first).
+    order_index: int = 0
     # — user-specific overlay
     lessons_completed: int = 0
     completed: bool = False
     quiz_score: int = 0
     quiz_max: int = 0
+    # ``true`` if the user must finish ``prerequisite_slug`` first.
+    locked: bool = False
 
 
 class LessonOut(BaseModel):

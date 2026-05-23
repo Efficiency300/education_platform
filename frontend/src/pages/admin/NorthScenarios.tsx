@@ -3,10 +3,13 @@ import {
   Plus,
   Trash2,
   GripVertical,
+  Mic,
   Save,
+  Sparkles,
   X,
 } from "lucide-react";
 import {
+  AdminUser,
   api,
   NorthInputType,
   NorthScenarioOut,
@@ -14,6 +17,7 @@ import {
   NorthState,
 } from "../../api";
 import GlassCard from "../../components/GlassCard";
+import DirectionsPicker from "../../components/DirectionsPicker";
 import { useT } from "../../state/LocaleContext";
 
 const ALL_STATES: NorthState[] = [
@@ -47,6 +51,12 @@ export default function NorthScenarios() {
   const [editing, setEditing] = useState<NorthScenarioOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [buildOpen, setBuildOpen] = useState(false);
+
+  useEffect(() => {
+    api.adminListUsers().then(setUsers).catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -111,10 +121,26 @@ export default function NorthScenarios() {
             {t("north.admin.subtitle")}
           </p>
         </div>
-        <button onClick={createNew} disabled={busy} className="btn-primary">
-          <Plus size={14} /> {t("north.admin.create")}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setBuildOpen(true)} className="btn-secondary">
+            <Sparkles size={14} /> {t("north.admin.build")}
+          </button>
+          <button onClick={createNew} disabled={busy} className="btn-primary">
+            <Plus size={14} /> {t("north.admin.create")}
+          </button>
+        </div>
       </header>
+
+      {buildOpen && (
+        <ScenarioBuildModal
+          onClose={() => setBuildOpen(false)}
+          onBuilt={(s) => {
+            setScenarios((prev) => [s, ...prev]);
+            setEditing(s);
+            setBuildOpen(false);
+          }}
+        />
+      )}
 
       {error && (
         <div
@@ -200,6 +226,7 @@ export default function NorthScenarios() {
             <ScenarioEditor
               key={editing.id}
               scenario={editing}
+              users={users}
               onSaved={(saved) => {
                 setScenarios((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
                 setEditing(saved);
@@ -236,12 +263,14 @@ export default function NorthScenarios() {
 
 function ScenarioEditor({
   scenario,
+  users,
   onSaved,
   onDelete,
   onTogglePublish,
   onClose,
 }: {
   scenario: NorthScenarioOut;
+  users: AdminUser[];
   onSaved: (next: NorthScenarioOut) => void;
   onDelete: () => void;
   onTogglePublish: () => void;
@@ -251,6 +280,9 @@ function ScenarioEditor({
   const [draft, setDraft] = useState({
     name: scenario.name,
     department: scenario.department,
+    directions: scenario.directions ?? [],
+    assigned_user_id: scenario.assigned_user_id ?? null,
+    course_tags: scenario.course_tags ?? [],
     steps: scenario.steps,
   });
   const [busy, setBusy] = useState(false);
@@ -260,6 +292,9 @@ function ScenarioEditor({
     () =>
       draft.name !== scenario.name ||
       draft.department !== scenario.department ||
+      JSON.stringify(draft.directions) !== JSON.stringify(scenario.directions ?? []) ||
+      draft.assigned_user_id !== (scenario.assigned_user_id ?? null) ||
+      JSON.stringify(draft.course_tags) !== JSON.stringify(scenario.course_tags ?? []) ||
       JSON.stringify(draft.steps) !== JSON.stringify(scenario.steps),
     [draft, scenario],
   );
@@ -271,6 +306,9 @@ function ScenarioEditor({
       const next = await api.adminUpdateScenario(scenario.id, {
         name: draft.name,
         department: draft.department,
+        directions: draft.directions,
+        assigned_user_id: draft.assigned_user_id,
+        course_tags: draft.course_tags,
         steps: draft.steps,
       });
       onSaved(next);
@@ -363,15 +401,54 @@ function ScenarioEditor({
         </button>
       </div>
 
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 500 }}>
+            {t("north.admin.directions")}
+          </label>
+          <div className="mt-1">
+            <DirectionsPicker
+              value={draft.directions}
+              onChange={(next) => setDraft({ ...draft, directions: next })}
+              placeholder={t("north.admin.departmentPh")}
+            />
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 500 }}>
+            {t("north.admin.assignedUser")}
+          </label>
+          <select
+            value={draft.assigned_user_id ?? ""}
+            onChange={(e) =>
+              setDraft({ ...draft, assigned_user_id: e.target.value ? Number(e.target.value) : null })
+            }
+            className="input mt-1"
+          >
+            <option value="">—</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name} · {u.email}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="mt-3">
         <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 500 }}>
-          {t("north.admin.department")}
+          {t("north.admin.tags")}
         </label>
         <input
-          value={draft.department}
-          onChange={(e) => setDraft({ ...draft, department: e.target.value })}
+          value={draft.course_tags.join(", ")}
+          onChange={(e) =>
+            setDraft({
+              ...draft,
+              course_tags: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+            })
+          }
           className="input mt-1"
-          placeholder={t("north.admin.departmentPh")}
+          placeholder="abs_basics, aml_compliance"
         />
       </div>
 
@@ -569,6 +646,171 @@ function Select<T extends string>({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+function ScenarioBuildModal({
+  onClose,
+  onBuilt,
+}: {
+  onClose: () => void;
+  onBuilt: (s: NorthScenarioOut) => void;
+}) {
+  const t = useT();
+  const [text, setText] = useState("");
+  const [name, setName] = useState("");
+  const [courseTags, setCourseTags] = useState("");
+  const [recognizing, setRecognizing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Browser SpeechRecognition (Chromium-only) — we fall back to text input
+  // wherever the API isn't available.
+  const startVoice = () => {
+    const SR: any =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setErr(t("nors.voiceUnsupported"));
+      return;
+    }
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.lang = navigator.language || "ru-RU";
+    rec.onresult = (e: any) => {
+      let buf = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        buf += e.results[i][0].transcript + " ";
+      }
+      setText((prev) => (prev ? prev + " " : "") + buf.trim());
+    };
+    rec.onend = () => setRecognizing(false);
+    rec.onerror = () => setRecognizing(false);
+    rec.start();
+    setRecognizing(true);
+  };
+
+  const submit = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const built = await api.adminBuildScenario({
+        description: text.trim(),
+        course_tags: courseTags
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        name: name.trim() || undefined,
+      });
+      onBuilt(built);
+    } catch (e: any) {
+      setErr(e?.detail || e?.message || "—");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
+      style={{ background: "rgba(0,0,0,0.65)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="my-8 w-full"
+        style={{
+          maxWidth: 560,
+          padding: 24,
+          borderRadius: "var(--radius-xl)",
+          background: "var(--bg-elevated)",
+          border: "0.5px solid var(--border-emphasis)",
+          color: "var(--text-primary)",
+          display: "grid",
+          gap: 12,
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t("north.admin.build")}</h2>
+          <button
+            onClick={onClose}
+            aria-label={t("common.cancel")}
+            style={{
+              width: 30,
+              height: 30,
+              background: "transparent",
+              border: "0.5px solid var(--border)",
+              borderRadius: "var(--radius-sm)",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="input"
+          placeholder={t("north.admin.namePh")}
+        />
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={6}
+          className="input"
+          placeholder={t("north.admin.buildPh")}
+        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={startVoice}
+            disabled={recognizing}
+            className={recognizing ? "btn-primary" : "btn-secondary"}
+            style={{ padding: "6px 12px", fontSize: 12 }}
+          >
+            <Mic size={12} /> {t("north.admin.voice")}
+          </button>
+          <input
+            value={courseTags}
+            onChange={(e) => setCourseTags(e.target.value)}
+            className="input"
+            placeholder={t("north.admin.tags")}
+          />
+        </div>
+        {err && (
+          <div
+            style={{
+              padding: "10px 14px",
+              borderRadius: "var(--radius-md)",
+              background: "rgba(240,62,62,0.08)",
+              border: "0.5px solid rgba(240,62,62,0.3)",
+              color: "var(--danger)",
+              fontSize: 12,
+            }}
+          >
+            {err}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-ghost">
+            {t("common.cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={busy || !text.trim()}
+            className="btn-primary"
+          >
+            <Sparkles size={14} /> {busy ? "…" : t("north.admin.build")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
