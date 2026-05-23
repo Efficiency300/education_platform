@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 import { api, AdminStats } from "../../api";
 import GlassCard from "../../components/GlassCard";
+import { useT } from "../../state/LocaleContext";
 
 export default function AdminDashboard() {
+  const t = useT();
   const [stats, setStats] = useState<AdminStats | null>(null);
   useEffect(() => {
     api.adminStats().then(setStats).catch(console.error);
@@ -26,31 +28,31 @@ export default function AdminDashboard() {
     <div className="flex flex-col gap-6">
       <header>
         <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <ShieldCheck size={14} className="text-gold-500" /> Admin Console
+          <ShieldCheck size={14} className="text-gold-500" /> {t("admin.kicker")}
         </div>
-        <h1 className="hero-text mt-2">Управление системой</h1>
+        <h1 className="hero-text mt-2">{t("admin.title")}</h1>
         <p className="mt-2 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
-          Управление курсами, регламентами, пользователями. Доступ только для роли admin.
+          {t("admin.subtitle")}
         </p>
       </header>
 
       <section className="grid gap-5 md:grid-cols-4">
-        <KPI label="Пользователей" value={stats?.users_total ?? 0} icon={<Users size={18} />} />
-        <KPI label="Курсов" value={`${(stats?.courses_built_in ?? 0) + (stats?.courses_custom ?? 0)}`} sub={`built-in ${stats?.courses_built_in ?? 0} · custom ${stats?.courses_custom ?? 0}`} icon={<BookOpen size={18} />} />
-        <KPI label="Регламентов / RAG-фрагментов" value={stats?.regulations_count ?? 0} sub={`${stats?.rag_chunks ?? 0} chunks`} icon={<FileText size={18} />} />
-        <KPI label="Завершённых курсов" value={stats?.completed_courses_total ?? 0} sub={`${stats?.completed_scenarios_total ?? 0} сценариев`} icon={<CheckCircle2 size={18} className="text-emerald-500" />} />
+        <KPI label={t("admin.kpi.users")} value={stats?.users_total ?? 0} icon={<Users size={18} />} />
+        <KPI label={t("admin.kpi.courses")} value={`${(stats?.courses_built_in ?? 0) + (stats?.courses_custom ?? 0)}`} sub={t("admin.kpi.coursesSub", { a: stats?.courses_built_in ?? 0, b: stats?.courses_custom ?? 0 })} icon={<BookOpen size={18} />} />
+        <KPI label={t("admin.kpi.regs")} value={stats?.regulations_count ?? 0} sub={t("admin.kpi.regsSub", { n: stats?.rag_chunks ?? 0 })} icon={<FileText size={18} />} />
+        <KPI label={t("admin.kpi.completed")} value={stats?.completed_courses_total ?? 0} sub={t("admin.kpi.completedSub", { n: stats?.completed_scenarios_total ?? 0 })} icon={<CheckCircle2 size={18} className="text-emerald-500" />} />
       </section>
 
       <section className="grid gap-5 md:grid-cols-3">
-        <Card to="/admin/courses" title="Курсы" subtitle="Создать, удалить, просмотреть весь каталог" icon={<BookOpen size={20} />} />
-        <Card to="/admin/regulations" title="Регламенты" subtitle="Загрузка markdown, переиндексация RAG" icon={<FileText size={20} />} />
-        <Card to="/admin/users" title="Пользователи" subtitle="Управление ролями (user · hr · admin)" icon={<Users size={20} />} />
+        <Card to="/admin/courses" title={t("admin.cards.coursesTitle")} subtitle={t("admin.cards.coursesSub")} icon={<BookOpen size={20} />} />
+        <Card to="/admin/regulations" title={t("admin.cards.regsTitle")} subtitle={t("admin.cards.regsSub")} icon={<FileText size={20} />} />
+        <Card to="/admin/users" title={t("admin.cards.usersTitle")} subtitle={t("admin.cards.usersSub")} icon={<Users size={20} />} />
       </section>
 
       <section className="grid gap-5 lg:grid-cols-2">
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center gap-2 font-display text-lg font-semibold">
-            <Layers size={18} className="text-gold-500" /> Состав пользователей по ролям
+            <Layers size={18} className="text-gold-500" /> {t("admin.rolesComposition")}
           </div>
           <div className="grid grid-cols-3 gap-3 text-center">
             {(["user", "hr", "admin"] as const).map((r) => (
@@ -66,13 +68,13 @@ export default function AdminDashboard() {
 
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center gap-2 font-display text-lg font-semibold">
-            <Settings size={18} className="text-gold-500" /> Режимы интеграций
+            <Settings size={18} className="text-gold-500" /> {t("admin.integrationsModes")}
           </div>
           <div className="space-y-3">
             <Row icon={<Sparkles size={14} />} label="LLM (Anthropic Claude)" mode={stats?.llm_mode ?? "mock"} />
             <Row icon={<FileText size={14} />} label="iSpring LMS" mode={stats?.ispring_mode ?? "mock"} />
-            <Row icon={<MessagesSquare size={14} />} label="Сообщений в чате" value={`${stats?.chat_messages_total ?? 0}`} />
-            <Row icon={<Gamepad2 size={14} />} label="Событий в журнале" value={`${stats?.activity_events_total ?? 0}`} />
+            <Row icon={<MessagesSquare size={14} />} label={t("admin.row.chatMsgs")} value={`${stats?.chat_messages_total ?? 0}`} />
+            <Row icon={<Gamepad2 size={14} />} label={t("admin.row.activity")} value={`${stats?.activity_events_total ?? 0}`} />
           </div>
         </GlassCard>
       </section>

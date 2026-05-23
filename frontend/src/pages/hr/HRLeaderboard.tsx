@@ -4,8 +4,10 @@ import { motion } from "framer-motion";
 import { Trophy, Sparkles } from "lucide-react";
 import { api, LeaderboardItem } from "../../api";
 import GlassCard from "../../components/GlassCard";
+import { useT } from "../../state/LocaleContext";
 
 export default function HRLeaderboard() {
+  const t = useT();
   const [items, setItems] = useState<LeaderboardItem[]>([]);
   useEffect(() => {
     api.hrLeaderboard(50).then(setItems).catch(console.error);
@@ -15,11 +17,11 @@ export default function HRLeaderboard() {
     <div className="flex flex-col gap-6">
       <header>
         <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <Trophy size={14} className="text-gold-500" /> Лидерборд
+          <Trophy size={14} className="text-gold-500" /> {t("hr.lb.kicker")}
         </div>
-        <h1 className="hero-text mt-2">Лучшие сотрудники</h1>
+        <h1 className="hero-text mt-2">{t("hr.lb.title")}</h1>
         <p className="mt-2 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
-          Сортировка по XP. Кликните на сотрудника для подробного профиля и AI-оценки.
+          {t("hr.lb.subtitle")}
         </p>
       </header>
 
@@ -65,7 +67,7 @@ export default function HRLeaderboard() {
                     </div>
                   </div>
                   <div className="text-right text-xs text-navy-900/60 dark:text-white/60">
-                    К {m.courses_done} · С {m.scenarios_done}
+                    {t("hr.lbCounts", { c: m.courses_done, s: m.scenarios_done })}
                   </div>
                 </div>
               </Link>
@@ -76,11 +78,11 @@ export default function HRLeaderboard() {
 
       <GlassCard className="!p-0 overflow-hidden">
         <div className="grid grid-cols-[60px_1.6fr_1fr_100px_120px_140px] items-center gap-4 border-b border-navy-900/8 bg-navy-900/[0.02] px-6 py-3 text-[10px] uppercase tracking-widest text-navy-900/50 dark:border-white/8 dark:bg-white/[0.02] dark:text-white/50">
-          <div>#</div>
-          <div>Сотрудник</div>
-          <div>Подразделение</div>
-          <div>Уровень</div>
-          <div>Модули</div>
+          <div>{t("hr.lb.colRank")}</div>
+          <div>{t("hr.team.colEmployee")}</div>
+          <div>{t("hr.team.colDepartment")}</div>
+          <div>{t("hr.lb.colLevel")}</div>
+          <div>{t("hr.team.colModules")}</div>
           <div className="text-right">XP</div>
         </div>
         <div className="divide-y divide-navy-900/8 dark:divide-white/8">
@@ -115,7 +117,7 @@ export default function HRLeaderboard() {
           ))}
           {items.length === 0 && (
             <div className="p-10 text-center text-sm text-navy-900/50 dark:text-white/50">
-              Лидерборд пока пуст.
+              {t("hr.lb.empty")}
             </div>
           )}
         </div>

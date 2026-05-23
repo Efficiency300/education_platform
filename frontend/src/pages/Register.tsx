@@ -1,13 +1,16 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
+import { useT } from "../state/LocaleContext";
+import { LanguageInline } from "../components/LanguageSwitcher";
 import { defaultRoute } from "./Login";
 
 export default function RegisterPage() {
   const { user, register, loading } = useAuth();
   const navigate = useNavigate();
+  const t = useT();
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -31,7 +34,7 @@ export default function RegisterPage() {
       const u = await register(form);
       navigate(defaultRoute(u.role), { replace: true });
     } catch (e: any) {
-      setErr(e?.detail || e?.message || "Не удалось зарегистрироваться");
+      setErr(e?.detail || e?.message || t("auth.register.errorDefault"));
     } finally {
       setBusy(false);
     }
@@ -40,86 +43,118 @@ export default function RegisterPage() {
   const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: 500,
+    color: "var(--text-secondary)",
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 py-12">
+    <div
+      className="flex items-center justify-center px-6 py-12"
+      style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)" }}
+    >
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 220, damping: 24 }}
-        className="w-full max-w-lg"
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="w-full"
+        style={{ maxWidth: 520 }}
       >
-        <div className="mb-7 flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-900 text-gold-500 dark:bg-white dark:text-navy-900">
-            <Sparkles size={18} />
+        <div className="mb-7 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo-icon.svg" alt="KOMPAS" style={{ width: 30, height: 30 }} />
+            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
+              KOMPAS
+            </span>
           </div>
-          <div className="font-display text-lg font-semibold">AI-Mentor · Turonbank</div>
+          <LanguageInline />
         </div>
 
-        <h2 className="font-display text-3xl font-semibold tracking-tight">Регистрация</h2>
-        <p className="mt-2 text-sm text-navy-900/60 dark:text-white/60">
-          Создайте аккаунт сотрудника. HR и админ-роли назначаются администратором.
+        <h2
+          style={{
+            fontSize: 30,
+            fontWeight: 800,
+            letterSpacing: "-0.02em",
+            color: "var(--text-primary)",
+          }}
+        >
+          {t("auth.register.title")}
+        </h2>
+        <p className="mt-2" style={{ fontSize: 14, color: "var(--text-secondary)" }}>
+          {t("auth.register.subtitle")}
         </p>
 
-        <form onSubmit={submit} className="mt-7 space-y-3">
+        <form onSubmit={submit} className="mt-7" style={{ display: "grid", gap: 16 }}>
           <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-              ФИО
-            </label>
+            <label style={labelStyle}>{t("auth.register.fullName")}</label>
             <input value={form.full_name} onChange={upd("full_name")} className="input" required minLength={2} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-                Email
-              </label>
+              <label style={labelStyle}>{t("auth.login.emailLabel")}</label>
               <input type="email" value={form.email} onChange={upd("email")} className="input" required />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-                Пароль <span className="opacity-50">· ≥ 6 символов</span>
+              <label style={labelStyle}>
+                {t("auth.login.passwordLabel")}{" "}
+                <span style={{ opacity: 0.5 }}>· {t("auth.register.passwordHint")}</span>
               </label>
               <input type="password" value={form.password} onChange={upd("password")} className="input" required minLength={6} />
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-                Статус
-              </label>
+              <label style={labelStyle}>{t("auth.register.status")}</label>
               <select value={form.position} onChange={upd("position")} className="input">
-                <option value="intern">Стажёр</option>
-                <option value="employee">Сотрудник</option>
+                <option value="intern">{t("position.intern")}</option>
+                <option value="employee">{t("position.employee")}</option>
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-                Подразделение
-              </label>
+              <label style={labelStyle}>{t("auth.register.department")}</label>
               <input value={form.department} onChange={upd("department")} className="input" />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-                Программа
-              </label>
+              <label style={labelStyle}>{t("auth.register.program")}</label>
               <input value={form.program} onChange={upd("program")} className="input" />
             </div>
           </div>
 
           {err && (
-            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: "var(--radius-md)",
+                background: "rgba(240,62,62,0.08)",
+                border: "0.5px solid rgba(240,62,62,0.3)",
+                color: "var(--danger)",
+                fontSize: 13,
+              }}
+            >
               {err}
             </div>
           )}
 
-          <button type="submit" disabled={busy} className="btn-primary w-full !justify-center !py-3">
-            {busy ? "Создание…" : (<>Создать аккаунт <ArrowRight size={14} /></>)}
+          <button
+            type="submit"
+            disabled={busy}
+            className="btn-primary"
+            style={{ width: "100%", padding: "12px 18px", fontSize: 14 }}
+          >
+            {busy ? t("auth.register.submitting") : (<>{t("auth.register.submit")} <ArrowRight size={14} /></>)}
           </button>
         </form>
 
-        <p className="mt-7 text-center text-sm text-navy-900/60 dark:text-white/60">
-          Уже есть аккаунт?{" "}
-          <Link to="/login" className="font-medium text-gold-700 hover:underline dark:text-gold-300">
-            Войти
+        <p
+          className="mt-7 text-center"
+          style={{ fontSize: 13, color: "var(--text-secondary)" }}
+        >
+          {t("auth.register.hasAccount")}{" "}
+          <Link to="/login" style={{ color: "var(--brand)", fontWeight: 500 }}>
+            {t("auth.register.login")}
           </Link>
         </p>
       </motion.div>

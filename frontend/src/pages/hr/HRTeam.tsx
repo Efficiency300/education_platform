@@ -3,11 +3,14 @@ import { Link } from "react-router-dom";
 import { Search, SortAsc } from "lucide-react";
 import { api, TeamMember } from "../../api";
 import GlassCard from "../../components/GlassCard";
-import StatusPill, { STATUS_META } from "./StatusPill";
+import StatusPill, { useStatusLabel } from "./StatusPill";
+import { useT } from "../../state/LocaleContext";
 
 type SortBy = "name" | "xp" | "completion" | "activity";
 
 export default function HRTeam() {
+  const t = useT();
+  const statusLabel = useStatusLabel();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<TeamMember["status"] | "all">("all");
@@ -51,9 +54,9 @@ export default function HRTeam() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="hero-text">Команда</h1>
+        <h1 className="hero-text">{t("hr.team.title")}</h1>
         <p className="mt-2 text-base text-navy-900/60 dark:text-white/60">
-          Всего сотрудников с ролью «user»: <strong>{totalCount}</strong>
+          {t("hr.team.usersWithRoleUser")} <strong>{totalCount}</strong>
         </p>
       </header>
 
@@ -64,28 +67,28 @@ export default function HRTeam() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Поиск по имени, email или подразделению"
+              placeholder={t("hr.team.searchPh")}
               className="input !pl-9"
             />
           </div>
           <div className="flex items-center gap-2">
             <SortAsc size={14} className="text-navy-900/50 dark:text-white/50" />
             <select className="input !w-auto" value={sort} onChange={(e) => setSort(e.target.value as SortBy)}>
-              <option value="xp">По XP</option>
-              <option value="completion">По прогрессу</option>
-              <option value="activity">По активности</option>
-              <option value="name">По имени</option>
+              <option value="xp">{t("hr.team.sortXp")}</option>
+              <option value="completion">{t("hr.team.sortCompletion")}</option>
+              <option value="activity">{t("hr.team.sortActivity")}</option>
+              <option value="name">{t("hr.team.sortName")}</option>
             </select>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label={`Все · ${totalCount}`} />
+          <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label={`${t("hr.team.filterAll")} · ${totalCount}`} />
           {(["not_started", "onboarding", "progressing", "ready", "excellent"] as const).map((s) => (
             <FilterChip
               key={s}
               active={filter === s}
               onClick={() => setFilter(s)}
-              label={`${STATUS_META[s].label} · ${statusCounts[s] ?? 0}`}
+              label={`${statusLabel(s)} · ${statusCounts[s] ?? 0}`}
             />
           ))}
         </div>
@@ -93,11 +96,11 @@ export default function HRTeam() {
 
       <GlassCard className="!p-0 overflow-hidden">
         <div className="grid grid-cols-[1.4fr_1fr_120px_120px_140px] items-center gap-4 border-b border-navy-900/8 bg-navy-900/[0.02] px-6 py-3 text-[10px] uppercase tracking-widest text-navy-900/50 dark:border-white/8 dark:bg-white/[0.02] dark:text-white/50">
-          <div>Сотрудник</div>
-          <div>Подразделение</div>
-          <div>Прогресс</div>
-          <div>Модули</div>
-          <div className="text-right">Статус</div>
+          <div>{t("hr.team.colEmployee")}</div>
+          <div>{t("hr.team.colDepartment")}</div>
+          <div>{t("hr.team.colProgress")}</div>
+          <div>{t("hr.team.colModules")}</div>
+          <div className="text-right">{t("hr.team.colStatus")}</div>
         </div>
         <div className="divide-y divide-navy-900/8 dark:divide-white/8">
           {visible.map((m) => (
@@ -127,11 +130,11 @@ export default function HRTeam() {
                     style={{ width: `${m.overall_completion_pct}%` }}
                   />
                 </div>
-                <div className="mt-0.5 text-[10px] text-navy-900/40 dark:text-white/40">{m.total_xp} XP · L{m.level}</div>
+                <div className="mt-0.5 text-[10px] text-navy-900/40 dark:text-white/40">{m.total_xp} {t("common.xp")} · L{m.level}</div>
               </div>
               <div className="text-xs tabular-nums">
-                <div>К {m.courses_done}/{m.courses_total}</div>
-                <div className="text-[10px] text-navy-900/40 dark:text-white/40">С {m.scenarios_done}/{m.scenarios_total}</div>
+                <div>{t("hr.modulesCoursesShort", { c: m.courses_done, ct: m.courses_total })}</div>
+                <div className="text-[10px] text-navy-900/40 dark:text-white/40">{t("hr.modulesScenariosShort", { s: m.scenarios_done, st: m.scenarios_total })}</div>
               </div>
               <div className="text-right">
                 <StatusPill status={m.status} />
@@ -145,7 +148,7 @@ export default function HRTeam() {
           ))}
           {visible.length === 0 && (
             <div className="p-10 text-center text-sm text-navy-900/50 dark:text-white/50">
-              Никого не нашлось по выбранному фильтру.
+              {t("hr.team.empty")}
             </div>
           )}
         </div>

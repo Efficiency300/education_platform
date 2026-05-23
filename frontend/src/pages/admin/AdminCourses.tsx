@@ -13,6 +13,7 @@ import {
 import { api, AdminCourse, AdminCourseCreate, ScenarioSummary } from "../../api";
 import GlassCard from "../../components/GlassCard";
 import { useProgress } from "../../state/ProgressContext";
+import { useT } from "../../state/LocaleContext";
 
 const DIFF_OPTIONS = ["easy", "medium", "hard"] as const;
 
@@ -43,6 +44,7 @@ const BLANK: AdminCourseCreate = {
 };
 
 export default function AdminCourses() {
+  const t = useT();
   const { scenarios } = useProgress();
   const [items, setItems] = useState<AdminCourse[]>([]);
   const [open, setOpen] = useState(false);
@@ -53,12 +55,12 @@ export default function AdminCourses() {
   useEffect(load, [load]);
 
   const onDelete = async (id: number) => {
-    if (!confirm("Удалить курс?")) return;
+    if (!confirm(t("admin.courses.confirmDelete"))) return;
     try {
       await api.adminDeleteCourse(id);
       load();
     } catch (e: any) {
-      alert(e?.detail || e?.message || "Не удалось");
+      alert(e?.detail || e?.message || t("admin.courses.deleteFailed"));
     }
   };
 
@@ -67,26 +69,25 @@ export default function AdminCourses() {
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-            <BookOpen size={14} className="text-gold-500" /> Контент
+            <BookOpen size={14} className="text-gold-500" /> {t("admin.courses.kicker")}
           </div>
-          <h1 className="hero-text mt-2">Курсы</h1>
+          <h1 className="hero-text mt-2">{t("admin.courses.title")}</h1>
           <p className="mt-2 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
-            Встроенные курсы поставляются с системой. Пользовательские курсы создаются
-            здесь и сразу доступны всем сотрудникам.
+            {t("admin.courses.subtitle")}
           </p>
         </div>
         <button className="btn-gold" onClick={() => setOpen(true)}>
-          <Plus size={14} /> Создать курс
+          <Plus size={14} /> {t("admin.courses.create")}
         </button>
       </header>
 
       <GlassCard className="!p-0 overflow-hidden">
         <div className="grid grid-cols-[1.5fr_1fr_120px_140px_80px] items-center gap-4 border-b border-navy-900/8 bg-navy-900/[0.02] px-6 py-3 text-[10px] uppercase tracking-widest text-navy-900/50 dark:border-white/8 dark:bg-white/[0.02] dark:text-white/50">
-          <div>Курс</div>
-          <div>Тип / автор</div>
-          <div>Уроки / квиз</div>
-          <div>Симулятор</div>
-          <div className="text-right">Действия</div>
+          <div>{t("admin.courses.colCourse")}</div>
+          <div>{t("admin.courses.colType")}</div>
+          <div>{t("admin.courses.colLessons")}</div>
+          <div>{t("admin.courses.colScenario")}</div>
+          <div className="text-right">{t("admin.courses.colActions")}</div>
         </div>
         <div className="divide-y divide-navy-900/8 dark:divide-white/8">
           {items.map((c) => {
@@ -116,13 +117,13 @@ export default function AdminCourses() {
                     {c.source === "custom" ? "Custom" : "Built-in"}
                   </div>
                   <div className="text-[11px] text-navy-900/50 dark:text-white/50">
-                    {c.created_by_name ?? "system"}
+                    {c.created_by_name ?? t("common.system")}
                   </div>
                 </div>
                 <div className="text-xs tabular-nums">
-                  <div>{c.lessons_count} уроков</div>
+                  <div>{c.lessons_count} {t("common.lessons")}</div>
                   <div className="text-[11px] text-navy-900/50 dark:text-white/50">
-                    <Clock size={9} className="inline" /> {c.estimated_minutes} мин · квиз: {c.quiz_count}
+                    <Clock size={9} className="inline" /> {c.estimated_minutes} {t("common.minutes")} · {t("admin.courses.editor.quiz")}: {c.quiz_count}
                   </div>
                 </div>
                 <div className="text-xs text-navy-900/70 dark:text-white/70">
@@ -140,7 +141,7 @@ export default function AdminCourses() {
                     <button
                       onClick={() => onDelete(c.id)}
                       className="rounded-full p-2 text-rose-600 transition hover:bg-rose-500/10"
-                      title="Удалить"
+                      title={t("common.delete")}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -153,7 +154,7 @@ export default function AdminCourses() {
           })}
           {items.length === 0 && (
             <div className="p-10 text-center text-sm text-navy-900/50 dark:text-white/50">
-              Загрузка…
+              {t("common.loading")}
             </div>
           )}
         </div>
@@ -177,6 +178,7 @@ function CourseEditor({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<AdminCourseCreate>(structuredClone(BLANK));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -236,7 +238,7 @@ function CourseEditor({
       onCreated();
       onClose();
     } catch (e: any) {
-      setErr(e?.detail || e?.message || "Не удалось");
+      setErr(e?.detail || e?.message || t("admin.courses.deleteFailed"));
     } finally {
       setBusy(false);
     }
@@ -261,9 +263,9 @@ function CourseEditor({
         <div className="mb-6 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-              <Plus size={14} className="text-gold-500" /> Новый курс
+              <Plus size={14} className="text-gold-500" /> {t("admin.courses.editor.kicker")}
             </div>
-            <h2 className="font-display text-xl font-semibold tracking-tight">Создать курс</h2>
+            <h2 className="font-display text-xl font-semibold tracking-tight">{t("admin.courses.editor.title")}</h2>
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-navy-900/60 hover:bg-navy-900/8 dark:text-white/60 dark:hover:bg-white/10">
             <X size={18} />
@@ -272,7 +274,7 @@ function CourseEditor({
 
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Slug (a-z, цифры, _ -)" required>
+            <Field label={t("admin.courses.editor.slug")} required>
               <input
                 value={draft.slug}
                 onChange={(e) => upd("slug", e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
@@ -280,23 +282,23 @@ function CourseEditor({
                 placeholder="my_new_course"
               />
             </Field>
-            <Field label="Иконка">
+            <Field label={t("admin.courses.editor.icon")}>
               <select value={draft.icon} onChange={(e) => upd("icon", e.target.value)} className="input">
-                <option value="book">Книга</option>
-                <option value="wallet">Кошелёк</option>
-                <option value="headphones">Наушники</option>
-                <option value="shield">Щит</option>
+                <option value="book">{t("admin.courses.iconBook")}</option>
+                <option value="wallet">{t("admin.courses.iconWallet")}</option>
+                <option value="headphones">{t("admin.courses.iconHeadphones")}</option>
+                <option value="shield">{t("admin.courses.iconShield")}</option>
               </select>
             </Field>
           </div>
 
-          <Field label="Название" required>
+          <Field label={t("admin.courses.editor.titleField")} required>
             <input value={draft.title} onChange={(e) => upd("title", e.target.value)} className="input" />
           </Field>
-          <Field label="Подзаголовок">
+          <Field label={t("admin.courses.editor.subtitle")}>
             <input value={draft.subtitle ?? ""} onChange={(e) => upd("subtitle", e.target.value)} className="input" />
           </Field>
-          <Field label="Описание">
+          <Field label={t("admin.courses.editor.description")}>
             <textarea
               value={draft.description ?? ""}
               onChange={(e) => upd("description", e.target.value)}
@@ -306,7 +308,7 @@ function CourseEditor({
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Сложность">
+            <Field label={t("admin.courses.editor.difficulty")}>
               <select
                 value={draft.difficulty}
                 onChange={(e) => upd("difficulty", e.target.value as any)}
@@ -317,7 +319,7 @@ function CourseEditor({
                 ))}
               </select>
             </Field>
-            <Field label="Длительность, мин">
+            <Field label={t("admin.courses.editor.duration")}>
               <input
                 type="number"
                 min={1}
@@ -326,13 +328,13 @@ function CourseEditor({
                 className="input"
               />
             </Field>
-            <Field label="Целевой сценарий">
+            <Field label={t("admin.courses.editor.targetScenario")}>
               <select
                 value={draft.target_scenario_id ?? ""}
                 onChange={(e) => upd("target_scenario_id", e.target.value)}
                 className="input"
               >
-                <option value="">— не выбран —</option>
+                <option value="">{t("admin.courses.editor.targetNone")}</option>
                 {scenarios.map((s) => (
                   <option key={s.id} value={s.id}>{s.title}</option>
                 ))}
@@ -340,21 +342,20 @@ function CourseEditor({
             </Field>
           </div>
 
-          <Field label="Теги (через запятую)">
+          <Field label={t("admin.courses.editor.tags")}>
             <input
               value={(draft.tags ?? []).join(", ")}
-              onChange={(e) => upd("tags", e.target.value.split(",").map((t) => t.trim()).filter(Boolean))}
+              onChange={(e) => upd("tags", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
               className="input"
             />
           </Field>
         </div>
 
-        {/* Уроки */}
         <div className="mt-7">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-base font-semibold">Уроки</h3>
+            <h3 className="font-display text-base font-semibold">{t("admin.courses.editor.lessons")}</h3>
             <button onClick={addLesson} className="btn-ghost !px-3 !py-1.5 text-xs">
-              <Plus size={12} /> Добавить
+              <Plus size={12} /> {t("admin.courses.editor.add")}
             </button>
           </div>
           <div className="space-y-3">
@@ -370,7 +371,7 @@ function CourseEditor({
                   <input
                     value={l.title}
                     onChange={(e) => updLesson(i, { title: e.target.value })}
-                    placeholder="Название"
+                    placeholder={t("admin.courses.editor.lessonName")}
                     className="input !py-2"
                   />
                   <input
@@ -391,13 +392,13 @@ function CourseEditor({
                 <input
                   value={l.summary}
                   onChange={(e) => updLesson(i, { summary: e.target.value })}
-                  placeholder="Краткое описание"
+                  placeholder={t("admin.courses.editor.lessonSummaryPh")}
                   className="input mt-2 !py-2"
                 />
                 <textarea
                   value={l.body_md}
                   onChange={(e) => updLesson(i, { body_md: e.target.value })}
-                  placeholder="Markdown содержимое урока"
+                  placeholder={t("admin.courses.editor.lessonBodyPh")}
                   className="input mt-2 font-mono !text-[12.5px]"
                   rows={4}
                 />
@@ -409,9 +410,9 @@ function CourseEditor({
         {/* Квиз */}
         <div className="mt-7">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-base font-semibold">Квиз</h3>
+            <h3 className="font-display text-base font-semibold">{t("admin.courses.editor.quiz")}</h3>
             <button onClick={addQuestion} className="btn-ghost !px-3 !py-1.5 text-xs">
-              <Plus size={12} /> Добавить вопрос
+              <Plus size={12} /> {t("admin.courses.editor.addQuestion")}
             </button>
           </div>
           <div className="space-y-3">
@@ -427,7 +428,7 @@ function CourseEditor({
                   <input
                     value={q.question}
                     onChange={(e) => updQuestion(qi, { question: e.target.value })}
-                    placeholder="Текст вопроса"
+                    placeholder={t("admin.courses.editor.questionTextPh")}
                     className="input !py-2"
                   />
                   <button

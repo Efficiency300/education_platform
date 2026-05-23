@@ -1,19 +1,16 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, ShieldCheck, Building2, ChevronRight } from "lucide-react";
+import { ArrowRight, ShieldCheck, Building2, ChevronRight } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
-
-const DEMO = [
-  { label: "User", email: "user@turonbank.uz", password: "user12345", role: "стажёр" },
-  { label: "HR", email: "hr@turonbank.uz", password: "hr12345", role: "HR" },
-  { label: "Admin", email: "admin@turonbank.uz", password: "admin12345", role: "админ" },
-];
+import { useT } from "../state/LocaleContext";
+import { LanguageInline } from "../components/LanguageSwitcher";
 
 export default function LoginPage() {
   const { user, login, loading } = useAuth();
   const navigate = useNavigate();
   const loc = useLocation();
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,6 +22,12 @@ export default function LoginPage() {
     return <Navigate to={to} replace />;
   }
 
+  const demo = [
+    { label: "User", email: "user@turonbank.uz", password: "user12345", role: t("auth.demo.userRole") },
+    { label: "HR", email: "hr@turonbank.uz", password: "hr12345", role: t("auth.demo.hrRole") },
+    { label: "Admin", email: "admin@turonbank.uz", password: "admin12345", role: t("auth.demo.adminRole") },
+  ];
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email || !password || busy) return;
@@ -34,7 +37,7 @@ export default function LoginPage() {
       const u = await login(email, password);
       navigate(defaultRoute(u.role), { replace: true });
     } catch (e: any) {
-      setErr(e?.detail || e?.message || "Не удалось войти");
+      setErr(e?.detail || e?.message || t("auth.login.errorDefault"));
     } finally {
       setBusy(false);
     }
@@ -47,75 +50,130 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1fr_1.1fr]">
-      {/* левая колонка — brand */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-navy-900 via-navy-800 to-navy-700 p-12 text-white lg:flex">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gold-500 text-navy-900">
-            <Sparkles size={20} strokeWidth={2.5} />
-          </div>
-          <div>
-            <div className="font-display text-lg font-semibold">AI-Mentor</div>
-            <div className="text-[10px] uppercase tracking-widest text-white/60">Turonbank</div>
-          </div>
+    <div
+      className="grid lg:grid-cols-[1fr_1.1fr]"
+      style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)" }}
+    >
+      {/* Hero panel */}
+      <div
+        className="relative hidden flex-col justify-between overflow-hidden lg:flex"
+        style={{
+          padding: 48,
+          background:
+            "linear-gradient(135deg, #1E1E1E 0%, #242424 60%, rgba(153,75,255,0.08) 100%)",
+          borderRight: "0.5px solid var(--border)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 36 }} />
+          <LanguageInline />
         </div>
 
         <div className="space-y-6">
-          <h1 className="font-display text-5xl font-semibold leading-tight tracking-tight">
-            Онбординг с AI
+          <h1
+            style={{
+              fontSize: 44,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.05,
+              color: "var(--text-primary)",
+            }}
+          >
+            {t("auth.login.heroTitle1")}
             <br />
-            <span className="bg-gradient-to-r from-gold-300 to-gold-500 bg-clip-text text-transparent">
-              для каждого сотрудника
+            <span style={{ color: "var(--brand)" }}>
+              {t("auth.login.heroTitle2")}
             </span>
           </h1>
-          <p className="max-w-md text-white/70">
-            Курсы, симулятор АБС/CRM, ассистент 24/7 и аналитика готовности.
-            Apple-вдохновлённый интерфейс, корпоративная безопасность.
+          <p
+            style={{
+              maxWidth: 480,
+              color: "var(--text-secondary)",
+              fontSize: 14,
+              lineHeight: 1.6,
+            }}
+          >
+            {t("auth.login.heroDesc")}
           </p>
-          <ul className="space-y-2.5 text-sm text-white/80">
+          <ul className="space-y-2.5" style={{ fontSize: 13, color: "var(--text-secondary)" }}>
             <li className="flex items-center gap-2">
-              <ShieldCheck size={16} className="text-gold-400" />
-              Safe sandbox · DLP-метки · изолированная БД
+              <ShieldCheck size={16} style={{ color: "var(--brand)" }} />
+              {t("auth.login.heroBullet1")}
             </li>
             <li className="flex items-center gap-2">
-              <Building2 size={16} className="text-gold-400" />
-              Три роли: сотрудник · HR · администратор
+              <Building2 size={16} style={{ color: "var(--brand)" }} />
+              {t("auth.login.heroBullet2")}
             </li>
           </ul>
+          <div className="ai-chip" style={{ marginTop: 8 }}>
+            <span className="ai-dot">G</span>
+            Powered by Gemini
+          </div>
         </div>
 
-        <div className="text-[11px] text-white/40">v0.3 · production-ready</div>
+        <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+          v0.4 · production-ready · i18n
+        </div>
 
-        <div className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-gold-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -top-32 -left-32 h-72 w-72 rounded-full bg-gold-500/10 blur-3xl" />
+        <div
+          aria-hidden
+          style={{
+            pointerEvents: "none",
+            position: "absolute",
+            bottom: -160,
+            right: -160,
+            width: 380,
+            height: 380,
+            borderRadius: "50%",
+            background: "var(--brand-glow)",
+            filter: "blur(80px)",
+          }}
+        />
       </div>
 
-      {/* правая колонка — форма */}
+      {/* Form panel */}
       <div className="flex items-center justify-center px-6 py-12">
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 220, damping: 24 }}
-          className="w-full max-w-md"
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="w-full"
+          style={{ maxWidth: 420 }}
         >
-          <div className="mb-8 lg:hidden">
+          <div className="mb-8 flex items-center justify-between lg:hidden">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-900 text-gold-500 dark:bg-white dark:text-navy-900">
-                <Sparkles size={18} />
-              </div>
-              <div className="font-display text-lg font-semibold">AI-Mentor · Turonbank</div>
+              <img src="/logo-icon.svg" alt="KOMPAS" style={{ width: 26, height: 26 }} />
+              <span style={{ fontSize: 16, fontWeight: 700 }}>KOMPAS</span>
             </div>
+            <LanguageInline />
           </div>
 
-          <h2 className="font-display text-3xl font-semibold tracking-tight">Вход</h2>
-          <p className="mt-2 text-sm text-navy-900/60 dark:text-white/60">
-            Войдите в свой корпоративный аккаунт.
+          <h2
+            style={{
+              fontSize: 30,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              color: "var(--text-primary)",
+            }}
+          >
+            {t("auth.login.title")}
+          </h2>
+          <p className="mt-2" style={{ fontSize: 14, color: "var(--text-secondary)" }}>
+            {t("auth.login.subtitle")}
           </p>
 
-          <form onSubmit={submit} className="mt-7 space-y-3">
+          <form onSubmit={submit} className="mt-7" style={{ display: "grid", gap: 16 }}>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-                Email
+              <label
+                className="block"
+                style={{
+                  marginBottom: 6,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                {t("auth.login.emailLabel")}
               </label>
               <input
                 type="email"
@@ -128,8 +186,16 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-navy-900/60 dark:text-white/60">
-                Пароль
+              <label
+                className="block"
+                style={{
+                  marginBottom: 6,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                {t("auth.login.passwordLabel")}
               </label>
               <input
                 type="password"
@@ -142,42 +208,96 @@ export default function LoginPage() {
             </div>
 
             {err && (
-              <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(240,62,62,0.08)",
+                  border: "0.5px solid rgba(240,62,62,0.3)",
+                  color: "var(--danger)",
+                  fontSize: 13,
+                }}
+              >
                 {err}
               </div>
             )}
 
-            <button type="submit" disabled={busy} className="btn-primary w-full !justify-center !py-3">
-              {busy ? "Вход…" : (<>Войти <ArrowRight size={14} /></>)}
+            <button
+              type="submit"
+              disabled={busy}
+              className="btn-primary"
+              style={{ width: "100%", padding: "12px 18px", fontSize: 14 }}
+            >
+              {busy ? t("auth.login.submitting") : (<>{t("auth.login.submit")} <ArrowRight size={14} /></>)}
             </button>
           </form>
 
-          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-widest text-navy-900/40 dark:text-white/40">
-            <span className="h-px flex-1 bg-navy-900/10 dark:bg-white/10" /> Demo-аккаунты
-            <span className="h-px flex-1 bg-navy-900/10 dark:bg-white/10" />
+          <div
+            className="my-6 flex items-center gap-3"
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--text-tertiary)",
+            }}
+          >
+            <span className="h-px flex-1" style={{ background: "var(--border)" }} />
+            {t("auth.login.demoSeparator")}
+            <span className="h-px flex-1" style={{ background: "var(--border)" }} />
           </div>
 
-          <div className="space-y-1.5">
-            {DEMO.map((d) => (
+          <div style={{ display: "grid", gap: 6 }}>
+            {demo.map((d) => (
               <button
                 key={d.email}
                 type="button"
                 onClick={() => quickFill(d)}
-                className="group flex w-full items-center justify-between rounded-2xl border border-navy-900/8 bg-white/40 px-4 py-2.5 text-left text-sm transition hover:border-gold-500/40 hover:bg-white/70 dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/8"
+                className="group kp-demo-row"
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--bg-card)",
+                  border: "0.5px solid var(--border)",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  fontFamily: "var(--font-kompas)",
+                  color: "var(--text-primary)",
+                }}
               >
                 <div>
-                  <div className="font-semibold">{d.label} <span className="ml-1 text-[11px] font-normal text-navy-900/50 dark:text-white/50">{d.role}</span></div>
-                  <div className="text-[11px] text-navy-900/50 dark:text-white/50">{d.email} · {d.password}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {d.label}{" "}
+                    <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-tertiary)" }}>
+                      {d.role}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                    {d.email} · {d.password}
+                  </div>
                 </div>
-                <ChevronRight size={14} className="text-navy-900/40 transition-transform group-hover:translate-x-0.5 dark:text-white/40" />
+                <ChevronRight size={14} style={{ color: "var(--text-tertiary)" }} />
               </button>
             ))}
           </div>
+          <style>{`
+            .kp-demo-row:hover {
+              border-color: var(--border-brand) !important;
+              background: var(--bg-hover) !important;
+            }
+          `}</style>
 
-          <p className="mt-7 text-center text-sm text-navy-900/60 dark:text-white/60">
-            Ещё нет аккаунта?{" "}
-            <Link to="/register" className="font-medium text-gold-700 hover:underline dark:text-gold-300">
-              Зарегистрироваться
+          <p
+            className="mt-7 text-center"
+            style={{ fontSize: 13, color: "var(--text-secondary)" }}
+          >
+            {t("auth.login.noAccount")}{" "}
+            <Link to="/register" style={{ color: "var(--brand)", fontWeight: 500 }}>
+              {t("auth.login.register")}
             </Link>
           </p>
         </motion.div>

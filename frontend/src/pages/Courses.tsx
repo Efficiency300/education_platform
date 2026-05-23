@@ -12,6 +12,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { useProgress } from "../state/ProgressContext";
+import { useT } from "../state/LocaleContext";
 import { CourseSummary } from "../api";
 
 const ICONS: Record<string, any> = {
@@ -20,14 +21,10 @@ const ICONS: Record<string, any> = {
   shield: Shield,
   book: BookOpen,
 };
-const DIFF: Record<string, { label: string; cls: string }> = {
-  easy: { label: "Базовый", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  medium: { label: "Средний", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  hard: { label: "Углублённый", cls: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
-};
 
 export default function CoursesPage() {
   const { courses, scenarios } = useProgress();
+  const t = useT();
   const scenarioMap = Object.fromEntries(scenarios.map((s) => [s.id, s.title]));
 
   const total = courses.length;
@@ -38,19 +35,18 @@ export default function CoursesPage() {
     <div className="flex flex-col gap-8">
       <header>
         <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <GraduationCap size={14} className="text-gold-500" /> Учебный центр
+          <GraduationCap size={14} className="text-gold-500" /> {t("courses.kicker")}
         </div>
-        <h1 className="hero-text mt-2">Курсы подготовки к симулятору</h1>
+        <h1 className="hero-text mt-2">{t("courses.title")}</h1>
         <p className="mt-3 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
-          Каждый курс — теория, проверка знаний и практика в симуляторе.
-          Завершите курс, чтобы быть готовым к реальным операциям.
+          {t("courses.subtitle")}
         </p>
       </header>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <Stat label="Всего курсов" value={total} icon={<BookOpen size={18} />} />
-        <Stat label="В процессе" value={inProgress} icon={<Sparkles size={18} className="text-gold-500" />} />
-        <Stat label="Завершено" value={completed} icon={<CheckCircle2 size={18} className="text-emerald-500" />} />
+        <Stat label={t("courses.statTotal")} value={total} icon={<BookOpen size={18} />} />
+        <Stat label={t("courses.statInProgress")} value={inProgress} icon={<Sparkles size={18} className="text-gold-500" />} />
+        <Stat label={t("courses.statCompleted")} value={completed} icon={<CheckCircle2 size={18} className="text-emerald-500" />} />
       </section>
 
       <section className="grid gap-5 lg:grid-cols-2">
@@ -88,7 +84,13 @@ function CourseCard({
   index: number;
   scenarioTitle: string;
 }) {
+  const t = useT();
   const Icon = ICONS[course.icon] ?? BookOpen;
+  const DIFF: Record<string, { label: string; cls: string }> = {
+    easy: { label: t("diff.basic"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+    medium: { label: t("diff.medium"), cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+    hard: { label: t("diff.advanced"), cls: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
+  };
   const diff = DIFF[course.difficulty] ?? DIFF.easy;
   const totalSteps = course.lessons_count + 1; // lessons + quiz
   const doneSteps = course.lessons_completed + (course.completed ? 1 : 0);
@@ -139,7 +141,7 @@ function CourseCard({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-navy-900/50 dark:text-white/50">
             <span>
-              {doneSteps} / {totalSteps} модулей
+              {t("courses.modulesCount", { done: doneSteps, total: totalSteps })}
             </span>
             <span className="tabular-nums">{pct}%</span>
           </div>
@@ -156,26 +158,26 @@ function CourseCard({
         <div className="flex items-center justify-between border-t border-navy-900/8 pt-4 dark:border-white/8">
           <div className="flex items-center gap-3 text-xs text-navy-900/50 dark:text-white/50">
             <span className="inline-flex items-center gap-1">
-              <BookOpen size={12} /> {course.lessons_count} уроков
+              <BookOpen size={12} /> {course.lessons_count} {t("common.lessons")}
             </span>
             <span className="inline-flex items-center gap-1">
-              <Clock size={12} /> {course.estimated_minutes} мин
+              <Clock size={12} /> {course.estimated_minutes} {t("common.minutes")}
             </span>
           </div>
           {course.completed ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 size={12} /> Завершён
+              <CheckCircle2 size={12} /> {t("common.completed")}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-navy-900 transition-all group-hover:gap-2 dark:text-white">
-              {course.lessons_completed > 0 ? "Продолжить" : "Начать"} <ArrowRight size={12} />
+              {course.lessons_completed > 0 ? t("dash.continue") : t("common.start")} <ArrowRight size={12} />
             </span>
           )}
         </div>
 
         <div className="-mx-6 -mb-6 mt-2 flex items-center justify-between gap-2 rounded-b-2xl border-t border-gold-500/25 bg-gradient-to-r from-gold-500/8 to-transparent px-6 py-3 text-xs">
           <span className="text-navy-900/60 dark:text-white/60">
-            После курса откроется симулятор <strong className="text-navy-900 dark:text-white">«{scenarioTitle}»</strong>
+            {t("courses.afterCourse")} <strong className="text-navy-900 dark:text-white">«{scenarioTitle}»</strong>
           </span>
         </div>
       </Link>

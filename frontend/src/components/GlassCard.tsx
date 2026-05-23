@@ -17,11 +17,12 @@ export default function GlassCard({
 }: Props) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 220, damping: 26 }}
-      whileHover={interactive ? { y: -3, transition: { type: "spring", stiffness: 300, damping: 20 } } : undefined}
-      className={`${strong ? "glass-strong" : "glass"} p-6 ${className}`}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      whileHover={interactive ? { y: -1, transition: { duration: 0.15 } } : undefined}
+      className={`${strong ? "glass-strong" : "glass"} ${className}`}
+      style={{ padding: 20 }}
       {...motionProps}
     >
       {children}

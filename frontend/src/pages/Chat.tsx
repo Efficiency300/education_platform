@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, FileText, ChevronDown, Bot, User as UserIcon } from "lucide-react";
 import { api, Source, streamChat } from "../api";
 import { useProgress } from "../state/ProgressContext";
+import { useT } from "../state/LocaleContext";
 
 interface Msg {
   role: "user" | "assistant";
@@ -11,15 +12,15 @@ interface Msg {
   streaming?: boolean;
 }
 
-const SUGGESTIONS = [
-  { label: "Дресс-код по пятницам", q: "Какой дресс-код по пятницам?" },
-  { label: "AML при открытии счёта", q: "Какие шаги KYC обязательны при открытии счёта?" },
-  { label: "Опоздание на работу", q: "Что делать, если я опаздываю?" },
-  { label: "Отпуск стажёра", q: "Сколько дней отпуска у стажёра?" },
-];
-
 export default function Chat() {
   const { user, refresh } = useProgress();
+  const t = useT();
+  const SUGGESTIONS = [
+    { label: t("chat.sug.dress"), q: t("chat.sug.dressQ") },
+    { label: t("chat.sug.aml"), q: t("chat.sug.amlQ") },
+    { label: t("chat.sug.late"), q: t("chat.sug.lateQ") },
+    { label: t("chat.sug.vacation"), q: t("chat.sug.vacationQ") },
+  ];
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -77,7 +78,7 @@ export default function Chat() {
       onError: (msg) => {
         setMessages((m) => {
           const copy = [...m];
-          copy[copy.length - 1] = { role: "assistant", content: `Ошибка: ${msg}`, streaming: false };
+          copy[copy.length - 1] = { role: "assistant", content: `${t("chat.errorPrefix")} ${msg}`, streaming: false };
           return copy;
         });
         setBusy(false);
@@ -102,11 +103,11 @@ export default function Chat() {
     <div className="flex flex-col gap-6">
       <div>
         <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <Sparkles size={14} className="text-gold-500" /> AI-наставник
+          <Sparkles size={14} className="text-gold-500" /> {t("chat.kicker")}
         </div>
-        <h1 className="hero-text mt-2">Спроси что угодно</h1>
+        <h1 className="hero-text mt-2">{t("chat.title")}</h1>
         <p className="mt-3 max-w-xl text-base text-navy-900/60 dark:text-white/60">
-          Ответы основаны на регламентах Turonbank. Источники прилагаются к каждому ответу.
+          {t("chat.subtitle")}
         </p>
       </div>
 
@@ -127,9 +128,9 @@ export default function Chat() {
                 <Bot size={28} strokeWidth={2.2} />
               </motion.div>
               <div>
-                <div className="font-display text-xl font-semibold">Здравствуйте 👋</div>
+                <div className="font-display text-xl font-semibold">{t("chat.hello")}</div>
                 <div className="mt-1 text-sm text-navy-900/50 dark:text-white/50">
-                  Выберите вопрос или задайте свой
+                  {t("chat.pickOrAsk")}
                 </div>
               </div>
               <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
@@ -188,7 +189,7 @@ export default function Chat() {
                     <details className="mt-2 inline-block max-w-full text-left">
                       <summary className="cursor-pointer list-none">
                         <span className="chip">
-                          <FileText size={11} /> {m.sources.length} источников
+                          <FileText size={11} /> {t("chat.sources", { n: m.sources.length })}
                           <ChevronDown size={11} />
                         </span>
                       </summary>
@@ -224,13 +225,13 @@ export default function Chat() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Спросите что-нибудь о Turonbank…"
+            placeholder={t("chat.placeholder")}
             disabled={busy}
             className="input"
           />
           {busy ? (
             <button type="button" onClick={stop} className="btn-ghost">
-              Стоп
+              {t("chat.stop")}
             </button>
           ) : (
             <motion.button

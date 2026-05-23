@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api, CourseDetail, QuizSubmitResponse } from "../api";
 import { useProgress } from "../state/ProgressContext";
+import { useT } from "../state/LocaleContext";
 import Markdown from "../components/Markdown";
 
 type Mode = "lesson" | "quiz" | "result";
@@ -22,6 +23,7 @@ export default function CourseDetailPage() {
   const { slug = "" } = useParams();
   const navigate = useNavigate();
   const { user, refresh, notify } = useProgress();
+  const t = useT();
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [activeLessonIdx, setActiveLessonIdx] = useState(0);
   const [mode, setMode] = useState<Mode>("lesson");
@@ -48,7 +50,7 @@ export default function CourseDetailPage() {
     setBusy(true);
     try {
       const res = await api.completeLesson(user.id, course.slug, activeLesson.slug);
-      if (res.points_awarded > 0) notify("ok", `+${res.points_awarded} XP — урок «${activeLesson.title}»`);
+      if (res.points_awarded > 0) notify("ok", t("course.lessonAward", { xp: res.points_awarded, title: activeLesson.title }));
       await refresh();
       await load();
       if (activeLessonIdx < course.lessons.length - 1) {
@@ -71,11 +73,11 @@ export default function CourseDetailPage() {
       setQuizResult(res);
       setMode("result");
       if (res.course_completed) {
-        notify("ok", `Курс «${course.title}» завершён · +${res.points_awarded} XP`);
+        notify("ok", t("toast.courseCompleted", { title: course.title, xp: res.points_awarded }));
       } else if (res.passed) {
-        notify("info", `Квиз сдан: ${res.score}/${res.max_score}`);
+        notify("info", t("toast.quizPassed", { s: res.score, m: res.max_score }));
       } else {
-        notify("warn", `Квиз: ${res.score}/${res.max_score}. Требуется повтор.`);
+        notify("warn", t("toast.quizFailed", { s: res.score, m: res.max_score }));
       }
       await refresh();
       await load();
@@ -96,14 +98,14 @@ export default function CourseDetailPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Link to="/courses" className="btn-ghost !px-3 !py-1.5">
-          <ArrowLeft size={14} /> К курсам
+          <ArrowLeft size={14} /> {t("course.toCourses")}
         </Link>
         <div className="flex items-center gap-2">
           <span className="chip">
-            <BookOpen size={11} /> {course.lessons.length} уроков
+            <BookOpen size={11} /> {t("course.lessonsCount", { n: course.lessons.length })}
           </span>
           <span className="chip">
-            <Clock size={11} /> {course.estimated_minutes} мин
+            <Clock size={11} /> {course.estimated_minutes} {t("common.minutes")}
           </span>
         </div>
       </div>
@@ -121,7 +123,7 @@ export default function CourseDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         <aside className="flex flex-col gap-1.5">
           <div className="px-2 text-[11px] uppercase tracking-widest text-navy-900/50 dark:text-white/50">
-            Программа
+            {t("course.program")}
           </div>
           {course.lessons.map((l, idx) => {
             const active = mode === "lesson" && idx === activeLessonIdx;
@@ -152,7 +154,7 @@ export default function CourseDetailPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">{l.title}</div>
                   <div className="mt-0.5 text-[11px] text-navy-900/50 dark:text-white/50">
-                    {l.duration_min} мин · {l.summary}
+                    {l.duration_min} {t("common.minutes")} · {l.summary}
                   </div>
                 </div>
               </button>
@@ -180,9 +182,9 @@ export default function CourseDetailPage() {
               {course.completed ? <Check size={13} /> : <Trophy size={12} />}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">Финальный квиз</div>
+              <div className="text-sm font-semibold">{t("course.quiz")}</div>
               <div className="mt-0.5 text-[11px] text-navy-900/50 dark:text-white/50">
-                {course.quiz.length} вопросов · нужно ≥ 70%
+                {t("course.quizCount", { n: course.quiz.length })}
               </div>
             </div>
           </button>
@@ -201,11 +203,11 @@ export default function CourseDetailPage() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="text-[11px] uppercase tracking-widest text-navy-900/50 dark:text-white/50">
-                    Урок {activeLessonIdx + 1} из {course.lessons.length}
+                    {t("course.lessonProgress", { idx: activeLessonIdx + 1, total: course.lessons.length })}
                   </div>
                   {activeLesson.completed && (
                     <span className="chip !bg-emerald-500/15 !text-emerald-700 dark:!text-emerald-300">
-                      <Check size={11} /> пройдено
+                      <Check size={11} /> {t("course.lessonDone")}
                     </span>
                   )}
                 </div>
@@ -224,7 +226,7 @@ export default function CourseDetailPage() {
                     onClick={() => setActiveLessonIdx((i) => Math.max(0, i - 1))}
                     className="btn-ghost disabled:opacity-30"
                   >
-                    <ArrowLeft size={14} /> Назад
+                    <ArrowLeft size={14} /> {t("common.back")}
                   </button>
                   <button
                     onClick={completeAndAdvance}
@@ -232,10 +234,10 @@ export default function CourseDetailPage() {
                     className="btn-primary"
                   >
                     {activeLessonIdx === course.lessons.length - 1
-                      ? "Перейти к квизу"
+                      ? t("course.toQuiz")
                       : activeLesson.completed
-                        ? "Следующий урок"
-                        : "Я изучил → дальше"} <ArrowRight size={14} />
+                        ? t("course.nextLesson")
+                        : t("course.studied")} <ArrowRight size={14} />
                   </button>
                 </div>
               </motion.div>
@@ -251,20 +253,20 @@ export default function CourseDetailPage() {
                 className="glass p-7"
               >
                 <div className="text-[11px] uppercase tracking-widest text-navy-900/50 dark:text-white/50">
-                  Финальный квиз
+                  {t("course.quiz")}
                 </div>
                 <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight">
-                  Проверка знаний
+                  {t("course.quizCheck")}
                 </h2>
                 <p className="mt-1 text-sm text-navy-900/60 dark:text-white/60">
-                  Для зачёта нужно ответить правильно как минимум на 70% вопросов.
+                  {t("course.quizThreshold")}
                 </p>
 
                 <div className="mt-6 space-y-5">
                   {course.quiz.map((q, qi) => (
                     <div key={q.id} className="rounded-2xl border border-navy-900/8 bg-white/40 p-5 dark:border-white/8 dark:bg-white/[0.03]">
                       <div className="text-[11px] uppercase tracking-wider text-navy-900/50 dark:text-white/50">
-                        Вопрос {qi + 1}
+                        {t("course.questionPrefix")} {qi + 1}
                       </div>
                       <div className="mt-1 text-base font-semibold">{q.question}</div>
                       <div className="mt-3 flex flex-col gap-2">
@@ -300,14 +302,14 @@ export default function CourseDetailPage() {
 
                 <div className="mt-7 flex items-center justify-between border-t border-navy-900/8 pt-5 dark:border-white/8">
                   <button onClick={() => setMode("lesson")} className="btn-ghost">
-                    <ArrowLeft size={14} /> К урокам
+                    <ArrowLeft size={14} /> {t("course.toLessons")}
                   </button>
                   <button
                     onClick={submitQuiz}
                     disabled={busy || Object.keys(answers).length < course.quiz.length}
                     className="btn-gold disabled:opacity-50"
                   >
-                    Отправить ответы <ArrowRight size={14} />
+                    {t("course.quizSubmit")} <ArrowRight size={14} />
                   </button>
                 </div>
               </motion.div>
@@ -337,7 +339,7 @@ export default function CourseDetailPage() {
                   </motion.div>
                   <div>
                     <div className="text-sm uppercase tracking-widest text-navy-900/50 dark:text-white/50">
-                      {quizResult.passed ? "Зачёт" : "Нужен повтор"}
+                      {quizResult.passed ? t("course.passed") : t("course.needRetry")}
                     </div>
                     <h2 className="hero-text mt-2">
                       {quizResult.score}/{quizResult.max_score}
@@ -345,7 +347,7 @@ export default function CourseDetailPage() {
                   </div>
                   {quizResult.course_completed && (
                     <div className="text-sm text-emerald-700 dark:text-emerald-300">
-                      Курс пройден · +{quizResult.points_awarded} XP
+                      {t("course.coursePassed")} · {t("course.xpEarned", { xp: quizResult.points_awarded })}
                     </div>
                   )}
                 </div>
@@ -375,7 +377,7 @@ export default function CourseDetailPage() {
                           </div>
                           {!r.correct && (
                             <div className="mt-1 text-navy-900/70 dark:text-white/70">
-                              Правильный ответ:{" "}
+                              {t("course.correctAnswer")}:{" "}
                               <strong>
                                 {q?.options.find((o) => o.id === r.expected_option_id)?.text}
                               </strong>
@@ -401,18 +403,18 @@ export default function CourseDetailPage() {
                     }}
                     className="btn-ghost"
                   >
-                    <RotateCw size={14} /> Пройти заново
+                    <RotateCw size={14} /> {t("course.tryAgain")}
                   </button>
                   {quizResult.passed ? (
                     <button
                       onClick={() => navigate(`/simulator/${quizResult.next_scenario_id}`)}
                       className="btn-gold"
                     >
-                      <Gamepad2 size={14} /> К симулятору
+                      <Gamepad2 size={14} /> {t("course.toSimulator")}
                     </button>
                   ) : (
                     <button onClick={() => setMode("lesson")} className="btn-primary">
-                      Вернуться к материалам <ArrowRight size={14} />
+                      {t("course.backToMaterial")} <ArrowRight size={14} />
                     </button>
                   )}
                 </div>

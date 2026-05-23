@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import RoleSidebar from "./components/RoleSidebar";
 import MobileNav from "./components/MobileNav";
+import Topbar from "./components/Topbar";
 import Toaster from "./components/Toaster";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
@@ -30,14 +31,20 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div
+        className="flex items-center justify-center"
+        style={{ minHeight: "100vh", background: "var(--bg-base)" }}
+      >
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="glass-strong flex items-center gap-3 px-8 py-6"
+          className="flex items-center gap-3 px-6 py-4 card"
         >
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-navy-900/20 border-t-gold-500" />
-          <span className="text-sm font-medium">Загрузка…</span>
+          <div
+            className="h-4 w-4 animate-spin rounded-full"
+            style={{ border: "2px solid var(--border-emphasis)", borderTopColor: "var(--brand)" }}
+          />
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Загрузка…</span>
         </motion.div>
       </div>
     );
@@ -54,19 +61,27 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div
+      className="flex w-full"
+      style={{ minHeight: "100vh", background: "var(--bg-base)", color: "var(--text-primary)" }}
+    >
       <RoleSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />
-        <main className="flex-1 px-4 pb-28 pt-6 md:px-10 md:pb-12 md:pt-10">
+        <Topbar />
+        <main
+          className="flex-1 overflow-y-auto px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-8"
+          style={{ background: "var(--bg-base)" }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ type: "spring", stiffness: 250, damping: 26 }}
-              className="mx-auto w-full max-w-6xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="mx-auto w-full"
+              style={{ maxWidth: "1200px" }}
             >
               <Routes location={location}>
                 {/* auth pages — если уже залогинен, редирект на дефолт по роли */}

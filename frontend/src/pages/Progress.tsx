@@ -17,9 +17,11 @@ import XPBar from "../components/XPBar";
 import BadgeGrid from "../components/BadgeGrid";
 import ActivityFeed from "../components/ActivityFeed";
 import { useProgress } from "../state/ProgressContext";
+import { useT } from "../state/LocaleContext";
 
 export default function ProgressPage() {
   const { user, progress: data, gamification: gam, scenarios, courses, activity, refresh, notify } = useProgress();
+  const t = useT();
   const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -29,11 +31,11 @@ export default function ProgressPage() {
     setToast(null);
     try {
       const res = await api.syncIspring(user.id);
-      const t = `Результаты отправлены в iSpring (режим: ${res.mode}).`;
-      setToast({ kind: "ok", text: t });
-      notify("ok", t);
+      const msg = t("progress.ispringSent", { mode: res.mode });
+      setToast({ kind: "ok", text: msg });
+      notify("ok", msg);
     } catch (e: any) {
-      setToast({ kind: "err", text: `Ошибка: ${e.message}` });
+      setToast({ kind: "err", text: `${t("common.error")}: ${e.message}` });
       notify("err", e.message);
     } finally {
       setSyncing(false);
@@ -69,16 +71,16 @@ export default function ProgressPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-            <TrendingUp size={14} className="text-gold-500" /> Аналитика
+            <TrendingUp size={14} className="text-gold-500" /> {t("progress.kicker")}
           </div>
-          <h1 className="hero-text mt-2">Мой прогресс</h1>
+          <h1 className="hero-text mt-2">{t("progress.title")}</h1>
           <p className="mt-2 text-base text-navy-900/60 dark:text-white/60">
-            Сводка по курсам, симуляторам и достижениям
+            {t("progress.subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={refresh} className="btn-ghost">
-            <ActivityIcon size={14} /> Обновить
+            <ActivityIcon size={14} /> {t("common.refresh")}
           </button>
           <motion.button
             whileHover={{ y: -2 }}
@@ -87,7 +89,7 @@ export default function ProgressPage() {
             disabled={syncing}
             className="btn-gold"
           >
-            {syncing ? "Отправка…" : (<><Send size={14} /> В iSpring</>)}
+            {syncing ? t("progress.sending") : (<><Send size={14} /> {t("progress.toIspring")}</>)}
           </motion.button>
         </div>
       </div>
@@ -109,15 +111,15 @@ export default function ProgressPage() {
 
       <div className="grid gap-5 md:grid-cols-4">
         <GlassCard interactive className="flex flex-col items-center text-center md:col-span-1">
-          <CircularProgress value={data.overall_completion_pct} sublabel="прогресс" />
+          <CircularProgress value={data.overall_completion_pct} sublabel={t("dash.overall")} />
           <div className="mt-3 text-xs font-medium text-navy-900/60 dark:text-white/60">
-            По всем модулям
+            {t("dash.allModules")}
           </div>
         </GlassCard>
 
         <GlassCard interactive className="md:col-span-2">
           <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
-            XP и уровень
+            {t("progress.xpLevel")}
           </div>
           <div className="mt-5">
             <XPBar level={gam.level} />
@@ -126,14 +128,14 @@ export default function ProgressPage() {
 
         <GlassCard interactive>
           <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
-            Бейджи
+            {t("dash.statBadges")}
           </div>
           <div className="mt-2 font-display text-4xl font-semibold tabular-nums">
             {gam.badges.filter((b) => b.earned).length}
             <span className="text-lg text-navy-900/40 dark:text-white/40"> / {gam.badges.length}</span>
           </div>
           <div className="mt-4 text-xs text-navy-900/60 dark:text-white/60">
-            Получено за всё время обучения
+            {t("progress.earnedAll")}
           </div>
         </GlassCard>
       </div>
@@ -142,7 +144,7 @@ export default function ProgressPage() {
         <GlassCard>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold">
-              <BookOpen size={16} className="text-gold-500" /> Курсы
+              <BookOpen size={16} className="text-gold-500" /> {t("progress.sectionCourses")}
             </div>
             <span className="chip">
               {data.breakdown.courses_done} / {data.breakdown.courses_total}
@@ -159,7 +161,7 @@ export default function ProgressPage() {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{c.title}</div>
                       <div className="text-[11px] text-navy-900/50 dark:text-white/50">
-                        {done}/{totalSteps} модулей
+                        {t("courses.modulesCount", { done, total: totalSteps })}
                       </div>
                     </div>
                     <div className="ml-3 text-sm font-semibold tabular-nums">{pct}%</div>
@@ -179,7 +181,7 @@ export default function ProgressPage() {
         <GlassCard>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold">
-              <Gamepad2 size={16} className="text-gold-500" /> Сценарии симулятора
+              <Gamepad2 size={16} className="text-gold-500" /> {t("progress.sectionScenarios")}
             </div>
             <span className="chip">
               {data.breakdown.simulator_done} / {data.breakdown.simulator_total}
@@ -195,7 +197,7 @@ export default function ProgressPage() {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{s.title}</div>
                       <div className="text-[11px] text-navy-900/50 dark:text-white/50">
-                        {row ? `${row.points} XP` : "Не пройдено"}
+                        {row ? `${row.points} ${t("common.xp")}` : t("common.notStarted")}
                       </div>
                     </div>
                     <div className="ml-3 text-sm font-semibold tabular-nums">{pct}%</div>
@@ -215,14 +217,14 @@ export default function ProgressPage() {
 
       <section>
         <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold tracking-tight">
-          <Sparkles size={18} className="text-gold-500" /> Достижения
+          <Sparkles size={18} className="text-gold-500" /> {t("progress.achievements")}
         </h2>
         <BadgeGrid badges={gam.badges} />
       </section>
 
       <section>
         <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold tracking-tight">
-          <ActivityIcon size={18} className="text-gold-500" /> Журнал активности
+          <ActivityIcon size={18} className="text-gold-500" /> {t("progress.activityLog")}
         </h2>
         <GlassCard className="!p-7">
           <ActivityFeed items={activity} />
@@ -230,11 +232,11 @@ export default function ProgressPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 font-display text-xl font-semibold tracking-tight">Все модули</h2>
+        <h2 className="mb-4 font-display text-xl font-semibold tracking-tight">{t("progress.allModules")}</h2>
         <GlassCard className="!p-0">
           {data.modules.length === 0 ? (
             <div className="p-10 text-center text-sm text-navy-900/50 dark:text-white/50">
-              Вы ещё не проходили ни одного модуля. Начните с курса.
+              {t("progress.empty")}
             </div>
           ) : (
             <div className="divide-y divide-navy-900/8 dark:divide-white/8">
@@ -249,7 +251,7 @@ export default function ProgressPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="rounded-full bg-navy-900/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-navy-900/60 dark:bg-white/10 dark:text-white/60">
-                        {m.kind === "course" || m.module.startsWith("course:") ? "Курс" : "Сценарий"}
+                        {m.kind === "course" || m.module.startsWith("course:") ? t("progress.tagCourse") : t("progress.tagScenario")}
                       </span>
                       <span className="truncate text-sm font-semibold">{moduleTitle(m)}</span>
                     </div>
@@ -270,7 +272,7 @@ export default function ProgressPage() {
                   </div>
                   <div className="text-right">
                     <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/15 px-2.5 py-0.5 text-xs font-semibold text-gold-700 dark:text-gold-300">
-                      {m.points} XP
+                      {m.points} {t("common.xp")}
                     </span>
                   </div>
                 </motion.div>

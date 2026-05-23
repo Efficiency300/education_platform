@@ -27,8 +27,8 @@ export default function CircularProgress({
       <svg width={size} height={size} className="-rotate-90">
         <defs>
           <linearGradient id="ring-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#C9A84C" />
-            <stop offset="100%" stopColor="#0A1628" />
+            <stop offset="0%" stopColor="#994BFF" />
+            <stop offset="100%" stopColor="#7A35E0" />
           </linearGradient>
         </defs>
         <circle
@@ -46,7 +46,7 @@ export default function CircularProgress({
           fill="none"
           strokeWidth={stroke}
           strokeLinecap="round"
-          stroke={gradient ? "url(#ring-gradient)" : "#C9A84C"}
+          stroke={gradient ? "url(#ring-gradient)" : "#994BFF"}
           strokeDasharray={c}
           initial={{ strokeDashoffset: c }}
           animate={{ strokeDashoffset: offset }}

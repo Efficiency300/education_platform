@@ -19,9 +19,11 @@ import GlassCard from "../../components/GlassCard";
 import ActivityFeed from "../../components/ActivityFeed";
 import { Donut } from "../../components/Charts";
 import StatusPill from "./StatusPill";
+import { useT } from "../../state/LocaleContext";
 
 export default function HRUserProfilePage() {
   const { id } = useParams();
+  const t = useT();
   const [data, setData] = useState<HRUserProfileType | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -53,7 +55,7 @@ export default function HRUserProfilePage() {
     <div className="flex flex-col gap-6">
       <div>
         <Link to="/hr/team" className="btn-ghost !px-3 !py-1.5">
-          <ArrowLeft size={14} /> К команде
+          <ArrowLeft size={14} /> {t("hr.toTeam")}
         </Link>
       </div>
 
@@ -64,18 +66,18 @@ export default function HRUserProfilePage() {
           </div>
           <div>
             <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-              <Sparkles size={14} className="text-gold-500" /> Профиль сотрудника
+              <Sparkles size={14} className="text-gold-500" /> {t("hr.profile.kicker")}
             </div>
             <h1 className="font-display text-3xl font-semibold tracking-tight">{u.full_name}</h1>
             <div className="mt-1 text-sm text-navy-900/60 dark:text-white/60">
-              {u.email} · {u.position === "intern" ? "Стажёр" : "Сотрудник"} · {u.department || "—"}
+              {u.email} · {u.position === "intern" ? t("position.intern") : t("position.employee")} · {u.department || "—"}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <StatusPill status={u.status} />
           <span className="chip">
-            <Award size={11} /> {u.total_xp} XP · L{u.level}
+            <Award size={11} /> {u.total_xp} {t("common.xp")} · L{u.level}
           </span>
         </div>
       </header>
@@ -89,9 +91,9 @@ export default function HRUserProfilePage() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-gold-700 dark:text-gold-300">
-                AI оценка компетенций
+                {t("hr.profile.aiKicker")}
                 <span className="rounded-full bg-navy-900/8 px-2 py-0.5 text-[9px] tracking-wider text-navy-900/60 dark:bg-white/10 dark:text-white/60">
-                  {c.mode === "live" ? "Claude" : "rule-based"}
+                  {c.mode === "live" ? t("hr.profile.modelLLM") : t("hr.profile.modelRule")}
                 </span>
               </div>
               <div className="mt-1 flex items-center gap-4">
@@ -120,7 +122,7 @@ export default function HRUserProfilePage() {
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 size={13} /> Сильные стороны
+                <CheckCircle2 size={13} /> {t("hr.profile.strengths")}
               </div>
               <ul className="mt-2 space-y-1.5 text-sm">
                 {c.strengths.length === 0 && (
@@ -135,11 +137,11 @@ export default function HRUserProfilePage() {
             </div>
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-300">
-                <Target size={13} /> Зоны роста
+                <Target size={13} /> {t("hr.profile.gaps")}
               </div>
               <ul className="mt-2 space-y-1.5 text-sm">
                 {c.gaps.length === 0 && (
-                  <li className="text-navy-900/40 dark:text-white/40">Нет явных пробелов</li>
+                  <li className="text-navy-900/40 dark:text-white/40">{t("hr.profile.noGaps")}</li>
                 )}
                 {c.gaps.map((s, i) => (
                   <li key={i} className="rounded-xl bg-amber-500/8 px-3 py-2">
@@ -152,7 +154,7 @@ export default function HRUserProfilePage() {
 
           <div className="mt-6 rounded-2xl border border-gold-500/30 bg-gradient-to-r from-gold-500/10 to-transparent p-4">
             <div className="text-[11px] uppercase tracking-widest text-gold-700 dark:text-gold-300">
-              Рекомендация
+              {t("hr.profile.recommendation")}
             </div>
             <div className="mt-1 text-sm font-medium">{c.recommendation}</div>
           </div>
@@ -161,12 +163,12 @@ export default function HRUserProfilePage() {
         {/* Donut + быстрые цифры */}
         <GlassCard className="!p-7">
           <div className="flex flex-col items-center gap-4">
-            <Donut value={u.overall_completion_pct} label="общий прогресс" size={140} />
+            <Donut value={u.overall_completion_pct} label={t("dash.overall")} size={140} />
             <div className="grid w-full grid-cols-2 gap-3 text-center">
-              <Mini label="Курсы" value={`${u.courses_done}/${u.courses_total}`} icon={<BookOpen size={14} />} />
-              <Mini label="Сценарии" value={`${u.scenarios_done}/${u.scenarios_total}`} icon={<Gamepad2 size={14} />} />
-              <Mini label="XP" value={`${u.total_xp}`} icon={<Sparkles size={14} className="text-gold-500" />} />
-              <Mini label="Вопросов AI" value={`${data.chat_questions}`} icon={<MessagesSquare size={14} />} />
+              <Mini label={t("hr.profile.miniCourses")} value={`${u.courses_done}/${u.courses_total}`} icon={<BookOpen size={14} />} />
+              <Mini label={t("hr.profile.miniScenarios")} value={`${u.scenarios_done}/${u.scenarios_total}`} icon={<Gamepad2 size={14} />} />
+              <Mini label={t("common.xp")} value={`${u.total_xp}`} icon={<Sparkles size={14} className="text-gold-500" />} />
+              <Mini label={t("hr.profile.miniQuestions")} value={`${data.chat_questions}`} icon={<MessagesSquare size={14} />} />
             </div>
           </div>
         </GlassCard>
@@ -176,7 +178,7 @@ export default function HRUserProfilePage() {
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <BookOpen size={18} className="text-gold-500" /> Курсы
+              <BookOpen size={18} className="text-gold-500" /> {t("hr.profile.courses")}
             </div>
           </div>
           <div className="space-y-2">
@@ -191,8 +193,8 @@ export default function HRUserProfilePage() {
                         {c.completed && <CheckCircle2 size={14} className="text-emerald-500" />}
                       </div>
                       <div className="text-[11px] text-navy-900/50 dark:text-white/50">
-                        Уроки {c.lessons_completed}/{c.lessons_total} · Квиз {c.quiz_score}/{c.quiz_max}
-                        {c.quiz_attempts > 0 && ` · ${c.quiz_attempts} попыток`}
+                        {t("hr.profile.coursesStat", { lc: c.lessons_completed, lt: c.lessons_total, qs: c.quiz_score, qm: c.quiz_max })}
+                        {c.quiz_attempts > 0 && ` · ${t("hr.profile.attempts", { n: c.quiz_attempts })}`}
                       </div>
                     </div>
                     <div className="text-sm font-semibold tabular-nums">{lpct}%</div>
@@ -212,7 +214,7 @@ export default function HRUserProfilePage() {
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Gamepad2 size={18} className="text-gold-500" /> Сценарии симулятора
+              <Gamepad2 size={18} className="text-gold-500" /> {t("hr.profile.scenarios")}
             </div>
           </div>
           <div className="space-y-2">
@@ -222,7 +224,7 @@ export default function HRUserProfilePage() {
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">{s.title}</div>
                     <div className="text-[11px] text-navy-900/50 dark:text-white/50">
-                      Попыток: {s.attempts} · лучший результат: {s.best_score}
+                      {t("hr.profile.attemptsLine", { n: s.attempts, best: s.best_score })}
                     </div>
                   </div>
                   <div
@@ -254,7 +256,7 @@ export default function HRUserProfilePage() {
 
       <section>
         <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold tracking-tight">
-          <TrendingUp size={18} className="text-gold-500" /> Последняя активность
+          <TrendingUp size={18} className="text-gold-500" /> {t("hr.profile.recent")}
         </h2>
         <GlassCard className="!p-7">
           <ActivityFeed items={data.activity.map((a, i) => ({ id: i, ...a }))} />

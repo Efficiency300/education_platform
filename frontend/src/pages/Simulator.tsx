@@ -26,6 +26,7 @@ import {
   AnswerResponse,
 } from "../api";
 import { useProgress } from "../state/ProgressContext";
+import { useT } from "../state/LocaleContext";
 
 const ICON_MAP: Record<string, any> = {
   wallet: Wallet,
@@ -33,16 +34,17 @@ const ICON_MAP: Record<string, any> = {
   shield: Shield,
   book: BookOpen,
 };
-const DIFF_LABEL: Record<string, { label: string; cls: string }> = {
-  easy: { label: "Лёгкий", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  medium: { label: "Средний", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  hard: { label: "Сложный", cls: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
-};
 
 export default function Simulator() {
   const { user, scenarios, courses, progress, refresh, notify } = useProgress();
   const { scenarioId } = useParams();
   const navigate = useNavigate();
+  const t = useT();
+  const DIFF_LABEL: Record<string, { label: string; cls: string }> = {
+    easy: { label: t("diff.easy"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+    medium: { label: t("diff.medium"), cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+    hard: { label: t("diff.hard"), cls: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
+  };
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [session, setSession] = useState<SimSession | null>(null);
   const [currentStep, setCurrentStep] = useState<ScenarioStep | null>(null);
@@ -82,7 +84,7 @@ export default function Simulator() {
       setSession((s) => (s ? { ...s, score: res.total_score, finished: res.finished } : s));
       if (res.finished) {
         await refresh();
-        notify("ok", `Сценарий завершён · ${res.total_score} XP`);
+        notify("ok", t("sim.completedToast", { xp: res.total_score }));
       }
     } finally {
       setBusy(false);
@@ -120,12 +122,11 @@ export default function Simulator() {
       <div className="flex flex-col gap-8">
         <div>
           <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-            <ShieldCheck size={14} className="text-emerald-500" /> Safe sandbox · dummy data
+            <ShieldCheck size={14} className="text-emerald-500" /> {t("sim.kicker")}
           </div>
-          <h1 className="hero-text mt-2">Симулятор рабочего места</h1>
+          <h1 className="hero-text mt-2">{t("sim.title")}</h1>
           <p className="mt-3 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
-            Изолированная среда. Никакого соединения с реальной АБС или клиентской базой.
-            Рекомендуется проходить после соответствующего курса.
+            {t("sim.subtitle")}
           </p>
         </div>
 
@@ -165,20 +166,20 @@ export default function Simulator() {
                 {course && !courseReady && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
                     <GraduationCap size={11} className="mr-1 inline" />
-                    Рекомендуется сначала пройти курс «{course.title}»
+                    {t("sim.suggestCourse", { name: course.title })}
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-navy-900/8 pt-4 dark:border-white/8">
                   <div className="flex items-center gap-1.5 text-xs text-navy-900/50 dark:text-white/50">
-                    <Clock size={12} /> {s.estimated_minutes} мин
+                    <Clock size={12} /> {s.estimated_minutes} {t("common.minutes")}
                   </div>
                   {done ? (
                     <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                      ✓ Лучший: {Math.round(done.completion_pct)}%
+                      {t("sim.bestPct", { pct: Math.round(done.completion_pct) })}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-navy-900 transition-all group-hover:gap-2 dark:text-white">
-                      Начать <ArrowRight size={12} />
+                      {t("common.start")} <ArrowRight size={12} />
                     </span>
                   )}
                 </div>
@@ -198,7 +199,7 @@ export default function Simulator() {
     );
     const pct = Math.round((session.score / maxPossible) * 100);
     const grade =
-      pct >= 90 ? "Отлично!" : pct >= 70 ? "Хорошо" : pct >= 50 ? "Удовлетворительно" : "Нужно повторить";
+      pct >= 90 ? t("sim.done.excellent") : pct >= 70 ? t("sim.done.good") : pct >= 50 ? t("sim.done.ok") : t("sim.done.repeat");
     return (
       <div className="flex flex-col items-center gap-8 py-8">
         <motion.div
@@ -213,7 +214,7 @@ export default function Simulator() {
           <div className="text-sm uppercase tracking-widest text-navy-900/50 dark:text-white/50">
             {grade}
           </div>
-          <h1 className="hero-text mt-2">Сценарий завершён</h1>
+          <h1 className="hero-text mt-2">{t("sim.done.title")}</h1>
           <p className="mt-2 text-navy-900/60 dark:text-white/60">{scenario.title}</p>
         </div>
         <motion.div
@@ -226,14 +227,14 @@ export default function Simulator() {
             {pct}%
           </div>
           <div className="text-sm text-navy-900/60 dark:text-white/60">
-            {session.score} из {maxPossible} баллов
+            {t("sim.done.scoreLine", { score: session.score, max: maxPossible })}
           </div>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <button onClick={restart} className="btn-ghost">
-              <ChevronLeft size={14} /> Другой сценарий
+              <ChevronLeft size={14} /> {t("sim.done.other")}
             </button>
             <button onClick={() => start(scenario.id)} className="btn-gold">
-              <RotateCw size={14} /> Пройти ещё раз
+              <RotateCw size={14} /> {t("common.retry")}
             </button>
           </div>
         </motion.div>
@@ -250,7 +251,7 @@ export default function Simulator() {
       <div className="flex items-center justify-between">
         <button onClick={restart} className="btn-ghost !px-3 !py-1.5">
           <ChevronLeft size={14} />
-          К сценариям
+          {t("sim.toScenarios")}
         </button>
         <motion.div
           initial={{ scale: 0.8 }}
@@ -265,7 +266,7 @@ export default function Simulator() {
         <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">{scenario.title}</h1>
         <div className="mt-3 flex items-center gap-3">
           <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
-            Шаг {stepIndex + 1} / {scenario.steps.length}
+            {t("sim.step", { idx: stepIndex + 1, total: scenario.steps.length })}
           </div>
           <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-navy-900/8 dark:bg-white/10">
             <motion.div
@@ -352,10 +353,10 @@ export default function Simulator() {
                   </div>
                   <div className="flex-1">
                     <div className="font-semibold">
-                      {lastResult.correct ? "Верно!" : "Не совсем"}
+                      {lastResult.correct ? t("common.allRight") : t("common.notQuite")}
                       {lastResult.points_awarded > 0 && (
                         <span className="ml-2 text-gold-600 dark:text-gold-400">
-                          +{lastResult.points_awarded} XP
+                          +{lastResult.points_awarded} {t("common.xp")}
                         </span>
                       )}
                     </div>
@@ -367,7 +368,7 @@ export default function Simulator() {
                     onClick={lastResult.next_step_id ? next : () => setLastResult(null)}
                     className="btn-primary !rounded-full !px-4 !py-1.5 shrink-0"
                   >
-                    {lastResult.next_step_id ? "Дальше" : "Итог"} <ArrowRight size={12} />
+                    {lastResult.next_step_id ? t("common.next") : t("common.finish")} <ArrowRight size={12} />
                   </button>
                 </motion.div>
               )}
@@ -384,6 +385,7 @@ export default function Simulator() {
 }
 
 function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string }) {
+  const t = useT();
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96 }}
@@ -393,9 +395,9 @@ function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string
     >
       <div className="flex items-center justify-between px-4 py-2 text-[10px] uppercase tracking-widest text-gold-700 dark:text-gold-400">
         <span className="inline-flex items-center gap-1.5">
-          <Lock size={11} /> Safe Sandbox
+          <Lock size={11} /> {t("common.safeSandbox")}
         </span>
-        <span>Dummy data</span>
+        <span>{t("common.dummyData")}</span>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-navy-900/15 bg-[#0F1B2E] text-slate-200 shadow-2xl">
@@ -406,19 +408,18 @@ function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string
             <span className="h-3 w-3 rounded-full bg-emerald-500/80" />
           </div>
           <div className="flex-1 text-center text-[11px] font-medium text-slate-400">
-            АБС Turonbank · Окно оператора
+            {t("sim.absWindow")}
           </div>
           <span className="text-[10px] text-gold-400">v.demo</span>
         </div>
         <div className="space-y-3 p-5 font-mono text-xs">
           <CustomerHeader scenario={scenario} />
-          <FieldRow label="Клиент" value={scenario.customer.name} />
-          <FieldRow label="Документ" value={scenario.customer.document} />
-          <FieldRow label="Цель обращения" value={scenario.customer.purpose} />
-          <FieldRow label="Текущий шаг" value={stepId} mono />
+          <FieldRow label={t("sim.fieldCustomer")} value={scenario.customer.name} />
+          <FieldRow label={t("sim.fieldDocument")} value={scenario.customer.document} />
+          <FieldRow label={t("sim.fieldPurpose")} value={scenario.customer.purpose} />
+          <FieldRow label={t("sim.fieldStep")} value={stepId} mono />
           <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3 text-[10px] leading-relaxed text-slate-400">
-            ⓘ Все данные клиента — сгенерированы. Никакого подключения к боевой АБС нет.
-            DLP-политика: запрет на ввод/просмотр реальных номеров счетов.
+            {t("sim.dlpNote")}
           </div>
         </div>
       </div>
@@ -427,13 +428,14 @@ function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string
 }
 
 function CustomerHeader({ scenario }: { scenario: Scenario }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-3 rounded-lg bg-gradient-to-r from-gold-500/15 to-transparent p-3">
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-xs font-bold text-navy-900">
         {scenario.customer.avatar}
       </div>
       <div className="flex-1">
-        <div className="text-[11px] text-slate-300">Виртуальный клиент</div>
+        <div className="text-[11px] text-slate-300">{t("sim.virtualCustomer")}</div>
         <div className="text-sm font-semibold text-white">{scenario.customer.name}</div>
       </div>
     </div>

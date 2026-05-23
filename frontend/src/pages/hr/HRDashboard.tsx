@@ -13,8 +13,10 @@ import { api, HRAnalytics, LeaderboardItem, TeamMember } from "../../api";
 import GlassCard from "../../components/GlassCard";
 import { HBarChart, Sparkline, VBarChart, Donut } from "../../components/Charts";
 import StatusPill from "./StatusPill";
+import { useT } from "../../state/LocaleContext";
 
 export default function HRDashboard() {
+  const t = useT();
   const [analytics, setAnalytics] = useState<HRAnalytics | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [top, setTop] = useState<LeaderboardItem[]>([]);
@@ -29,28 +31,28 @@ export default function HRDashboard() {
     <div className="flex flex-col gap-8">
       <header>
         <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <Sparkles size={14} className="text-gold-500" /> HR Dashboard
+          <Sparkles size={14} className="text-gold-500" /> {t("hr.kicker")}
         </div>
-        <h1 className="hero-text mt-2">Обзор онбординга</h1>
+        <h1 className="hero-text mt-2">{t("hr.overview.title")}</h1>
         <p className="mt-2 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
-          Состояние команды, прогресс по модулям, активность за последние две недели.
+          {t("hr.overview.subtitle")}
         </p>
       </header>
 
       <section className="grid gap-5 md:grid-cols-4">
-        <Stat icon={<Users size={18} />} label="Сотрудников" value={analytics?.total_users ?? 0} />
-        <Stat icon={<Activity size={18} className="text-emerald-500" />} label="Активны за 7 дней" value={analytics?.active_last_7d ?? 0} />
-        <Stat icon={<TrendingUp size={18} className="text-gold-500" />} label="Средний прогресс" value={`${analytics?.avg_completion_pct ?? 0}%`} />
-        <Stat icon={<Sparkles size={18} className="text-gold-500" />} label="Средний XP" value={Math.round(analytics?.avg_xp ?? 0)} />
+        <Stat icon={<Users size={18} />} label={t("hr.stat.employees")} value={analytics?.total_users ?? 0} />
+        <Stat icon={<Activity size={18} className="text-emerald-500" />} label={t("hr.stat.active7d")} value={analytics?.active_last_7d ?? 0} />
+        <Stat icon={<TrendingUp size={18} className="text-gold-500" />} label={t("hr.stat.avgProgress")} value={`${analytics?.avg_completion_pct ?? 0}%`} />
+        <Stat icon={<Sparkles size={18} className="text-gold-500" />} label={t("hr.stat.avgXP")} value={Math.round(analytics?.avg_xp ?? 0)} />
       </section>
 
       <section className="grid gap-5 lg:grid-cols-3">
         <GlassCard className="lg:col-span-2 !p-7">
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Activity size={18} className="text-gold-500" /> Активность за 14 дней
+              <Activity size={18} className="text-gold-500" /> {t("hr.activity14d")}
             </div>
-            <span className="chip">События</span>
+            <span className="chip">{t("hr.events")}</span>
           </div>
           {analytics ? (
             <div className="h-40">
@@ -65,10 +67,10 @@ export default function HRDashboard() {
           <div className="mb-5 flex items-center justify-center">
             <div className="text-center">
               <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
-                Средняя готовность
+                {t("hr.avgReadiness")}
               </div>
               <div className="mt-4">
-                <Donut value={analytics?.avg_completion_pct ?? 0} label="готовность" />
+                <Donut value={analytics?.avg_completion_pct ?? 0} label={t("hr.readinessLabel")} />
               </div>
             </div>
           </div>
@@ -78,8 +80,8 @@ export default function HRDashboard() {
       <section className="grid gap-5 lg:grid-cols-2">
         <GlassCard className="!p-7">
           <div className="mb-5 flex items-center justify-between">
-            <div className="font-display text-lg font-semibold">Прохождение курсов</div>
-            <span className="chip">% сотрудников</span>
+            <div className="font-display text-lg font-semibold">{t("hr.coursesCompletion")}</div>
+            <span className="chip">{t("hr.pctEmployees")}</span>
           </div>
           {analytics ? (
             <HBarChart data={analytics.course_completion} max={100} />
@@ -90,8 +92,8 @@ export default function HRDashboard() {
 
         <GlassCard className="!p-7">
           <div className="mb-5 flex items-center justify-between">
-            <div className="font-display text-lg font-semibold">Прохождение сценариев</div>
-            <span className="chip">% сотрудников</span>
+            <div className="font-display text-lg font-semibold">{t("hr.scenariosCompletion")}</div>
+            <span className="chip">{t("hr.pctEmployees")}</span>
           </div>
           {analytics ? (
             <HBarChart data={analytics.scenario_completion} max={100} />
@@ -104,8 +106,8 @@ export default function HRDashboard() {
       <section className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
         <GlassCard className="!p-7">
           <div className="mb-5 flex items-center justify-between">
-            <div className="font-display text-lg font-semibold">Распределение XP</div>
-            <span className="chip">сотрудников в группе</span>
+            <div className="font-display text-lg font-semibold">{t("hr.xpDistribution")}</div>
+            <span className="chip">{t("hr.xpInGroup")}</span>
           </div>
           {analytics ? <VBarChart data={analytics.xp_distribution} height={140} /> : <Skeleton h={160} />}
         </GlassCard>
@@ -113,13 +115,13 @@ export default function HRDashboard() {
         <GlassCard className="!p-7">
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Trophy size={18} className="text-gold-500" /> Топ-5 сотрудников
+              <Trophy size={18} className="text-gold-500" /> {t("hr.top5")}
             </div>
             <Link
               to="/hr/leaderboard"
               className="inline-flex items-center gap-1 text-xs font-medium text-navy-900/60 hover:text-navy-900 dark:text-white/60 dark:hover:text-white"
             >
-              Весь лидерборд <ArrowUpRight size={12} />
+              {t("hr.fullLeaderboard")} <ArrowUpRight size={12} />
             </Link>
           </div>
           <div className="space-y-2">
@@ -150,7 +152,7 @@ export default function HRDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">{m.total_xp} XP</div>
+                <div className="text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">{m.total_xp} {t("common.xp")}</div>
               </Link>
             ))}
             {top.length === 0 && <Skeleton h={120} />}
@@ -161,16 +163,16 @@ export default function HRDashboard() {
       <section>
         <div className="mb-4 flex items-end justify-between">
           <div>
-            <h2 className="font-display text-2xl font-semibold tracking-tight">Команда</h2>
+            <h2 className="font-display text-2xl font-semibold tracking-tight">{t("hr.teamHeader")}</h2>
             <p className="mt-1 text-sm text-navy-900/50 dark:text-white/50">
-              Кликните на сотрудника, чтобы открыть детальный профиль с AI-оценкой компетенций
+              {t("hr.teamHeaderSub")}
             </p>
           </div>
           <Link
             to="/hr/team"
             className="inline-flex items-center gap-1 text-xs font-medium text-navy-900/60 hover:text-navy-900 dark:text-white/60 dark:hover:text-white"
           >
-            Все сотрудники <ArrowUpRight size={12} />
+            {t("hr.allEmployees")} <ArrowUpRight size={12} />
           </Link>
         </div>
         <GlassCard className="!p-0 overflow-hidden">
@@ -199,10 +201,10 @@ export default function HRDashboard() {
                   </div>
                   <div className="text-xs text-navy-900/70 dark:text-white/70">{m.department || "—"}</div>
                   <div className="text-xs tabular-nums">
-                    {m.overall_completion_pct}% · {m.total_xp} XP
+                    {m.overall_completion_pct}% · {m.total_xp} {t("common.xp")}
                   </div>
                   <div className="text-xs tabular-nums">
-                    К {m.courses_done}/{m.courses_total} · С {m.scenarios_done}/{m.scenarios_total}
+                    {t("hr.modulesShort", { c: m.courses_done, ct: m.courses_total, s: m.scenarios_done, st: m.scenarios_total })}
                   </div>
                   <div className="text-right">
                     <StatusPill status={m.status} />
@@ -212,7 +214,7 @@ export default function HRDashboard() {
             ))}
             {team.length === 0 && (
               <div className="p-10 text-center text-sm text-navy-900/50 dark:text-white/50">
-                Сотрудники с ролью «user» появятся здесь после регистрации.
+                {t("hr.emptyTeam")}
               </div>
             )}
           </div>

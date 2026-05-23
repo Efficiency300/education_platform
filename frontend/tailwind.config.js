@@ -5,62 +5,87 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Turonbank brand
-        navy: {
-          50: "#f3f6fb",
-          100: "#e2e9f3",
-          200: "#c4d2e6",
-          300: "#9ab0d0",
-          400: "#6a87b6",
-          500: "#46659c",
-          600: "#34507f",
-          700: "#284067",
-          800: "#152547",
-          900: "#0A1628",
-          950: "#06101d",
+        // KOMPAS brand purple — accent across the app
+        brand: {
+          DEFAULT: "#994BFF",
+          50:  "#F5EDFF",
+          100: "#E7D5FF",
+          200: "#D0AEFF",
+          300: "#B988FF",
+          400: "#A668FF",
+          500: "#994BFF",
+          600: "#7A35E0",
+          700: "#5E26B5",
+          800: "#421A82",
+          900: "#2B1158",
         },
+        // Legacy "navy" tokens remapped to KOMPAS dark-surface scale.
+        // Pages keep their utility classes but render in the new palette.
+        navy: {
+          50:  "#F5F5F5",
+          100: "#E5E5E5",
+          200: "#A0A0A0",
+          300: "#A0A0A0",
+          400: "#606060",
+          500: "#404040",
+          600: "#303030",
+          700: "#2A2A2A",
+          800: "#242424",
+          900: "#1E1E1E",
+          950: "#171717",
+        },
+        // Legacy "gold" tokens remapped to brand purple scale.
         gold: {
-          50: "#fbf8ee",
-          100: "#f5edcf",
-          200: "#ead89b",
-          300: "#ddbe63",
-          400: "#d2a93f",
-          500: "#C9A84C",
-          600: "#a87a26",
-          700: "#865923",
-          800: "#704924",
-          900: "#603e22",
+          50:  "#F5EDFF",
+          100: "#E7D5FF",
+          200: "#D0AEFF",
+          300: "#B988FF",
+          400: "#A668FF",
+          500: "#994BFF",
+          600: "#7A35E0",
+          700: "#5E26B5",
+          800: "#421A82",
+          900: "#2B1158",
         },
       },
       fontFamily: {
         sans: [
+          "PP Neue Machina",
+          "Space Grotesk",
           "Inter",
-          "SF Pro Display",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",
           "sans-serif",
         ],
         display: [
-          "SF Pro Display",
+          "PP Neue Machina",
+          "Space Grotesk",
           "Inter",
           "-apple-system",
           "BlinkMacSystemFont",
           "sans-serif",
         ],
       },
+      borderRadius: {
+        sm: "6px",
+        md: "10px",
+        lg: "14px",
+        xl: "20px",
+      },
       boxShadow: {
-        glass: "0 8px 32px 0 rgba(10, 22, 40, 0.08)",
-        "glass-lg": "0 20px 60px -20px rgba(10, 22, 40, 0.15)",
-        soft: "0 1px 3px rgba(10, 22, 40, 0.04), 0 4px 12px rgba(10, 22, 40, 0.04)",
-        ring: "0 0 0 4px rgba(201, 168, 76, 0.18)",
+        // Depth is borders, not shadows — kept defined so legacy classes resolve flat.
+        glass: "none",
+        "glass-lg": "none",
+        soft: "none",
+        ring: "0 0 0 0.5px rgba(153, 75, 255, 0.35)",
       },
       backdropBlur: {
         xs: "2px",
       },
       animation: {
-        "fade-in": "fadeIn 0.5s ease-out",
-        "slide-up": "slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
+        "fade-in": "fadeIn 0.2s ease-out",
+        "slide-up": "slideUp 0.2s ease-out",
         shimmer: "shimmer 2s linear infinite",
       },
       keyframes: {
@@ -69,7 +94,7 @@ export default {
           "100%": { opacity: "1" },
         },
         slideUp: {
-          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         shimmer: {

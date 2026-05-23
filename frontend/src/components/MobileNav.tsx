@@ -4,8 +4,6 @@ import {
   MessagesSquare,
   Gamepad2,
   TrendingUp,
-  Moon,
-  Sun,
   BookOpen,
   Users,
   Trophy,
@@ -14,82 +12,118 @@ import {
   FileText,
   LogOut,
 } from "lucide-react";
-import { useTheme } from "../theme";
 import { useAuth } from "../state/AuthContext";
-
-const NAV_USER = [
-  { to: "/", label: "Главная", icon: LayoutDashboard, end: true },
-  { to: "/courses", label: "Курсы", icon: BookOpen },
-  { to: "/simulator", label: "Симул.", icon: Gamepad2 },
-  { to: "/chat", label: "AI", icon: MessagesSquare },
-  { to: "/progress", label: "Прогр.", icon: TrendingUp },
-];
-
-const NAV_HR = [
-  { to: "/hr", label: "Обзор", icon: LayoutDashboard, end: true },
-  { to: "/hr/team", label: "Команда", icon: Users },
-  { to: "/hr/leaderboard", label: "Топ", icon: Trophy },
-  { to: "/hr/analytics", label: "Графики", icon: PieChart },
-];
-
-const NAV_ADMIN = [
-  { to: "/admin", label: "Обзор", icon: LayoutDashboard, end: true },
-  { to: "/admin/courses", label: "Курсы", icon: BookOpen },
-  { to: "/admin/regulations", label: "Регл.", icon: FileText },
-  { to: "/admin/users", label: "Польз.", icon: Users },
-  { to: "/admin/settings", label: "Сист.", icon: Settings },
-];
+import { useT } from "../state/LocaleContext";
+import { LanguageInline } from "./LanguageSwitcher";
 
 export default function MobileNav() {
-  const { theme, toggle } = useTheme();
   const { user, logout } = useAuth();
+  const t = useT();
   if (!user) return null;
-  const nav = user.role === "admin" ? NAV_ADMIN : user.role === "hr" ? NAV_HR : NAV_USER;
+
+  const navUser = [
+    { to: "/", label: t("nav.home"), icon: LayoutDashboard, end: true },
+    { to: "/courses", label: t("nav.courses"), icon: BookOpen },
+    { to: "/simulator", label: t("nav.simulator"), icon: Gamepad2 },
+    { to: "/chat", label: t("nav.assistant"), icon: MessagesSquare },
+    { to: "/progress", label: t("nav.progress"), icon: TrendingUp },
+  ];
+  const navHR = [
+    { to: "/hr", label: t("nav.overview"), icon: LayoutDashboard, end: true },
+    { to: "/hr/team", label: t("nav.team"), icon: Users },
+    { to: "/hr/leaderboard", label: t("nav.leaderboard"), icon: Trophy },
+    { to: "/hr/analytics", label: t("nav.analytics"), icon: PieChart },
+  ];
+  const navAdmin = [
+    { to: "/admin", label: t("nav.overview"), icon: LayoutDashboard, end: true },
+    { to: "/admin/courses", label: t("nav.courses"), icon: BookOpen },
+    { to: "/admin/regulations", label: t("nav.regulations"), icon: FileText },
+    { to: "/admin/users", label: t("nav.users"), icon: Users },
+    { to: "/admin/settings", label: t("nav.settings"), icon: Settings },
+  ];
+  const nav = user.role === "admin" ? navAdmin : user.role === "hr" ? navHR : navUser;
 
   return (
     <>
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-navy-900/8 bg-white/60 px-4 py-3 backdrop-blur-2xl dark:border-white/8 dark:bg-navy-900/60 md:hidden">
+      <div
+        className="sticky top-0 z-30 flex items-center justify-between md:hidden"
+        style={{
+          padding: "10px 16px",
+          background: "var(--bg-elevated)",
+          borderBottom: "0.5px solid var(--border)",
+        }}
+      >
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-navy-900 text-gold-500 dark:bg-white dark:text-navy-900">
-            <span className="text-xs font-bold">AM</span>
-          </div>
-          <div className="font-display text-sm font-semibold">AI-Mentor · Turonbank</div>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={toggle}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-900/70 hover:bg-navy-900/5 dark:text-white/70 dark:hover:bg-white/10"
+          <img src="/logo-icon.svg" alt="KOMPAS" style={{ width: 22, height: 22 }} />
+          <span
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: "var(--text-primary)",
+              letterSpacing: "-0.01em",
+            }}
           >
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
+            KOMPAS
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <LanguageInline />
           <button
             onClick={logout}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-900/70 hover:bg-rose-500/10 hover:text-rose-600 dark:text-white/70"
-            title="Выйти"
+            className="flex items-center justify-center"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "var(--radius-sm)",
+              background: "transparent",
+              border: "0.5px solid var(--border)",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+            }}
+            aria-label={t("profile.logout")}
+            title={t("profile.logout")}
           >
-            <LogOut size={16} />
+            <LogOut size={14} />
           </button>
         </div>
       </div>
 
-      <nav className="fixed bottom-3 left-3 right-3 z-30 flex items-center justify-around gap-1 rounded-2xl border border-navy-900/8 bg-white/70 px-1.5 py-2 shadow-glass-lg backdrop-blur-2xl dark:border-white/8 dark:bg-navy-900/70 md:hidden">
+      <nav
+        className="fixed z-30 flex items-center justify-around gap-1 md:hidden"
+        style={{
+          left: 12,
+          right: 12,
+          bottom: 12,
+          padding: "6px",
+          background: "var(--bg-elevated)",
+          border: "0.5px solid var(--border-emphasis)",
+          borderRadius: "var(--radius-lg)",
+        }}
+      >
         {nav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `flex flex-1 flex-col items-center gap-0.5 rounded-xl px-1.5 py-1.5 text-[10px] font-medium transition ${
-                isActive
-                  ? "bg-navy-900 text-white dark:bg-white dark:text-navy-900"
-                  : "text-navy-900/60 dark:text-white/60"
-              }`
+              `flex flex-1 flex-col items-center gap-0.5 ${isActive ? "kp-mob-active" : "kp-mob-idle"}`
             }
+            style={{
+              padding: "8px 4px",
+              borderRadius: "var(--radius-sm)",
+              fontSize: 10,
+              fontWeight: 500,
+              transition: "all 0.15s ease",
+            }}
           >
             <item.icon size={16} />
             {item.label}
           </NavLink>
         ))}
+        <style>{`
+          .kp-mob-idle { color: var(--text-tertiary); background: transparent; }
+          .kp-mob-active { color: var(--brand); background: var(--brand-subtle); border: 0.5px solid var(--border-brand); }
+        `}</style>
       </nav>
     </>
   );

@@ -20,6 +20,7 @@ import CircularProgress from "../components/CircularProgress";
 import XPBar from "../components/XPBar";
 import ActivityFeed from "../components/ActivityFeed";
 import { useProgress } from "../state/ProgressContext";
+import { useT } from "../state/LocaleContext";
 
 const ICON_MAP: Record<string, any> = {
   wallet: Wallet,
@@ -30,6 +31,7 @@ const ICON_MAP: Record<string, any> = {
 
 export default function Dashboard() {
   const { user, progress, gamification, courses, activity } = useProgress();
+  const t = useT();
   if (!user) return null;
 
   const firstName = user.full_name.split(" ").slice(-1)[0] || user.full_name;
@@ -45,16 +47,16 @@ export default function Dashboard() {
       >
         <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
           <Sparkles size={14} className="text-gold-500" />
-          {gamification?.level.title ?? "Новичок"} · Уровень {gamification?.level.level ?? 1}
+          {gamification?.level.title ?? "—"} · {t("common.level")} {gamification?.level.level ?? 1}
         </div>
         <h1 className="hero-text mt-2">
-          Привет,{" "}
+          {t("dash.hello")},{" "}
           <span className="bg-gradient-to-r from-navy-900 to-gold-600 bg-clip-text text-transparent dark:from-white dark:to-gold-400">
             {firstName}
           </span>
         </h1>
         <p className="mt-3 max-w-xl text-base text-navy-900/60 dark:text-white/60">
-          Программа «{user.program || "—"}». Сегодня — отличный день, чтобы продолжить онбординг.
+          {t("dash.programLine", { name: user.program || "—" })}
         </p>
       </motion.section>
 
@@ -62,20 +64,20 @@ export default function Dashboard() {
         <GlassCard interactive className="flex flex-col items-center text-center">
           <CircularProgress
             value={progress?.overall_completion_pct ?? 0}
-            sublabel="общий прогресс"
+            sublabel={t("dash.overall")}
           />
           <div className="mt-3 text-sm font-medium text-navy-900/60 dark:text-white/60">
-            По курсам и симуляторам
+            {t("dash.allModules")}
           </div>
           {progress && (
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
               <span className="rounded-full bg-navy-900/5 px-2.5 py-1 dark:bg-white/10">
                 <BookOpen size={10} className="mr-1 inline" />
-                Курсы {progress.breakdown.courses_done}/{progress.breakdown.courses_total}
+                {t("nav.courses")} {progress.breakdown.courses_done}/{progress.breakdown.courses_total}
               </span>
               <span className="rounded-full bg-navy-900/5 px-2.5 py-1 dark:bg-white/10">
                 <Gamepad2 size={10} className="mr-1 inline" />
-                Сценарии {progress.breakdown.simulator_done}/{progress.breakdown.simulator_total}
+                {t("progress.sectionScenarios")} {progress.breakdown.simulator_done}/{progress.breakdown.simulator_total}
               </span>
             </div>
           )}
@@ -85,7 +87,7 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
-                XP / Геймификация
+                {t("dash.statXP")}
               </div>
               <div className="mt-2 font-display text-4xl font-semibold tabular-nums">
                 {progress?.total_points ?? 0}
@@ -106,7 +108,7 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
-                Бейджи
+                {t("dash.statBadges")}
               </div>
               <div className="mt-2 font-display text-4xl font-semibold tabular-nums">
                 {earnedBadges}
@@ -135,7 +137,7 @@ export default function Dashboard() {
             to="/progress"
             className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-navy-900/60 hover:text-navy-900 dark:text-white/60 dark:hover:text-white"
           >
-            Посмотреть все <ArrowUpRight size={12} />
+            {t("dash.viewAll")} <ArrowUpRight size={12} />
           </Link>
         </GlassCard>
       </section>
@@ -149,7 +151,7 @@ export default function Dashboard() {
               </div>
               <div className="flex-1">
                 <div className="text-[11px] uppercase tracking-widest text-gold-700 dark:text-gold-300">
-                  {recommendedCourse.completed ? "Все курсы пройдены" : "Рекомендуем продолжить"}
+                  {recommendedCourse.completed ? t("dash.recommended.allDone") : t("dash.recommended.continue")}
                 </div>
                 <h3 className="mt-1 font-display text-xl font-semibold tracking-tight">
                   {recommendedCourse.title}
@@ -169,12 +171,12 @@ export default function Dashboard() {
                         }}
                       />
                     </div>
-                    {recommendedCourse.lessons_completed}/{recommendedCourse.lessons_count} уроков
+                    {recommendedCourse.lessons_completed}/{recommendedCourse.lessons_count} {t("common.lessons")}
                   </div>
                 )}
               </div>
               <Link to={`/courses/${recommendedCourse.slug}`} className="btn-gold">
-                {recommendedCourse.completed ? "Открыть курс" : "Продолжить"} <ArrowUpRight size={14} />
+                {recommendedCourse.completed ? t("dash.openCourse") : t("dash.continue")} <ArrowUpRight size={14} />
               </Link>
             </div>
           </GlassCard>
@@ -184,16 +186,16 @@ export default function Dashboard() {
       <section>
         <div className="mb-4 flex items-end justify-between">
           <div>
-            <h2 className="font-display text-2xl font-semibold tracking-tight">Доступные курсы</h2>
+            <h2 className="font-display text-2xl font-semibold tracking-tight">{t("dash.coursesHeader")}</h2>
             <p className="mt-1 text-sm text-navy-900/50 dark:text-white/50">
-              Теория → проверка знаний → практика в симуляторе
+              {t("dash.coursesSub")}
             </p>
           </div>
           <Link
             to="/courses"
             className="inline-flex items-center gap-1 text-xs font-medium text-navy-900/60 hover:text-navy-900 dark:text-white/60 dark:hover:text-white"
           >
-            Все курсы <ArrowUpRight size={12} />
+            {t("dash.allCourses")} <ArrowUpRight size={12} />
           </Link>
         </div>
 
@@ -220,7 +222,7 @@ export default function Dashboard() {
                     </div>
                     {c.completed ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                        <CheckCircle2 size={10} /> Пройдено
+                        <CheckCircle2 size={10} /> {t("common.completed")}
                       </span>
                     ) : (
                       <span className="rounded-full bg-navy-900/5 px-2.5 py-0.5 text-[10px] font-semibold text-navy-900/60 dark:bg-white/10 dark:text-white/60">
@@ -236,10 +238,10 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center justify-between border-t border-navy-900/8 pt-4 dark:border-white/8">
                     <div className="flex items-center gap-1.5 text-xs text-navy-900/50 dark:text-white/50">
-                      <Clock size={12} /> {c.estimated_minutes} мин · {c.lessons_count} уроков
+                      <Clock size={12} /> {c.estimated_minutes} {t("common.minutes")} · {c.lessons_count} {t("common.lessons")}
                     </div>
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-navy-900 transition-all group-hover:gap-2 dark:text-white">
-                      {c.lessons_completed > 0 || c.completed ? "Открыть" : "Начать"} <ArrowUpRight size={12} />
+                      {c.lessons_completed > 0 || c.completed ? t("common.open") : t("common.start")} <ArrowUpRight size={12} />
                     </span>
                   </div>
                 </Link>
@@ -253,13 +255,13 @@ export default function Dashboard() {
         <GlassCard className="!p-7">
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <ActivityIcon size={18} className="text-gold-500" /> Последняя активность
+              <ActivityIcon size={18} className="text-gold-500" /> {t("dash.lastActivity")}
             </div>
             <Link
               to="/progress"
               className="inline-flex items-center gap-1 text-xs font-medium text-navy-900/60 hover:text-navy-900 dark:text-white/60 dark:hover:text-white"
             >
-              Подробнее <ArrowUpRight size={12} />
+              {t("dash.more")} <ArrowUpRight size={12} />
             </Link>
           </div>
           <ActivityFeed items={activity} limit={6} />
@@ -271,18 +273,17 @@ export default function Dashboard() {
               <MessagesSquare size={20} />
             </div>
             <div>
-              <h3 className="font-display text-lg font-semibold">AI-наставник 24/7</h3>
+              <h3 className="font-display text-lg font-semibold">{t("dash.assistant24")}</h3>
               <p className="text-xs text-navy-900/60 dark:text-white/60">
-                Со ссылками на регламенты Turonbank
+                {t("dash.assistantSub")}
               </p>
             </div>
           </div>
           <p className="mt-4 text-sm text-navy-900/70 dark:text-white/70">
-            Не нашли ответ в курсе? Задайте вопрос AI-наставнику — он подберёт цитаты
-            из официальных регламентов и подскажет, какой раздел повторить.
+            {t("dash.assistantBody")}
           </p>
           <Link to="/chat" className="btn-primary mt-5 w-full !justify-center">
-            Открыть чат <ArrowUpRight size={14} />
+            {t("dash.openChat")} <ArrowUpRight size={14} />
           </Link>
         </GlassCard>
       </section>

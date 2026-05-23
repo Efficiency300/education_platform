@@ -3,8 +3,10 @@ import { Activity, BookOpen, Gamepad2, PieChart, Sparkles, Users } from "lucide-
 import { api, HRAnalytics as Data } from "../../api";
 import GlassCard from "../../components/GlassCard";
 import { HBarChart, Sparkline, VBarChart, Donut } from "../../components/Charts";
+import { useT } from "../../state/LocaleContext";
 
 export default function HRAnalyticsPage() {
+  const t = useT();
   const [data, setData] = useState<Data | null>(null);
   useEffect(() => {
     api.hrAnalytics().then(setData).catch(console.error);
@@ -14,23 +16,23 @@ export default function HRAnalyticsPage() {
     <div className="flex flex-col gap-6">
       <header>
         <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <PieChart size={14} className="text-gold-500" /> Аналитика
+          <PieChart size={14} className="text-gold-500" /> {t("hr.an.kicker")}
         </div>
-        <h1 className="hero-text mt-2">Метрики онбординга</h1>
+        <h1 className="hero-text mt-2">{t("hr.an.title")}</h1>
       </header>
 
       <section className="grid gap-5 md:grid-cols-4">
-        <KPI icon={<Users size={18} />} label="Сотрудников" value={data?.total_users ?? 0} />
-        <KPI icon={<Activity size={18} className="text-emerald-500" />} label="Активны (7 дн)" value={data?.active_last_7d ?? 0} />
-        <KPI icon={<Sparkles size={18} className="text-gold-500" />} label="Средний XP" value={Math.round(data?.avg_xp ?? 0)} />
-        <KPI icon={<PieChart size={18} className="text-gold-500" />} label="Средний прогресс" value={`${data?.avg_completion_pct ?? 0}%`} />
+        <KPI icon={<Users size={18} />} label={t("hr.stat.employees")} value={data?.total_users ?? 0} />
+        <KPI icon={<Activity size={18} className="text-emerald-500" />} label={t("hr.stat.active7d")} value={data?.active_last_7d ?? 0} />
+        <KPI icon={<Sparkles size={18} className="text-gold-500" />} label={t("hr.stat.avgXP")} value={Math.round(data?.avg_xp ?? 0)} />
+        <KPI icon={<PieChart size={18} className="text-gold-500" />} label={t("hr.stat.avgProgress")} value={`${data?.avg_completion_pct ?? 0}%`} />
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Activity size={18} className="text-gold-500" /> Активность за 14 дней
+              <Activity size={18} className="text-gold-500" /> {t("hr.activity14d")}
             </div>
           </div>
           <div className="h-44">{data && <Sparkline data={data.activity_last_14d} height={170} />}</div>
@@ -38,8 +40,8 @@ export default function HRAnalyticsPage() {
 
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center justify-between">
-            <div className="font-display text-lg font-semibold">Распределение XP</div>
-            <span className="chip">сотрудников</span>
+            <div className="font-display text-lg font-semibold">{t("hr.xpDistribution")}</div>
+            <span className="chip">{t("hr.xpInGroup")}</span>
           </div>
           {data && <VBarChart data={data.xp_distribution} height={170} />}
         </GlassCard>
@@ -48,13 +50,13 @@ export default function HRAnalyticsPage() {
       <section className="grid gap-5 lg:grid-cols-2">
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center gap-2 font-display text-lg font-semibold">
-            <BookOpen size={18} className="text-gold-500" /> Прохождение курсов
+            <BookOpen size={18} className="text-gold-500" /> {t("hr.coursesCompletion")}
           </div>
           {data && <HBarChart data={data.course_completion} max={100} />}
         </GlassCard>
         <GlassCard className="!p-7">
           <div className="mb-4 flex items-center gap-2 font-display text-lg font-semibold">
-            <Gamepad2 size={18} className="text-gold-500" /> Прохождение сценариев
+            <Gamepad2 size={18} className="text-gold-500" /> {t("hr.scenariosCompletion")}
           </div>
           {data && <HBarChart data={data.scenario_completion} max={100} />}
         </GlassCard>
@@ -62,30 +64,30 @@ export default function HRAnalyticsPage() {
 
       <section className="grid gap-5 lg:grid-cols-2">
         <GlassCard className="!p-7">
-          <div className="mb-4 font-display text-lg font-semibold">Средняя готовность команды</div>
+          <div className="mb-4 font-display text-lg font-semibold">{t("hr.avgReadiness")}</div>
           <div className="flex items-center justify-center">
-            <Donut value={data?.avg_completion_pct ?? 0} label="готовность" size={180} />
+            <Donut value={data?.avg_completion_pct ?? 0} label={t("hr.readinessLabel")} size={180} />
           </div>
         </GlassCard>
         <GlassCard className="!p-7">
-          <div className="mb-4 font-display text-lg font-semibold">Что это значит</div>
+          <div className="mb-4 font-display text-lg font-semibold">{t("hr.an.note.title")}</div>
           <ul className="space-y-3 text-sm text-navy-900/80 dark:text-white/80">
             <li className="flex gap-3">
               <span className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />
               <div>
-                <strong>Активны за 7 дней</strong> — заходили в платформу и оставили события: уроки, симуляторы, чат с AI.
+                <strong>{t("hr.an.note1Title")}</strong> {t("hr.an.note1Body")}
               </div>
             </li>
             <li className="flex gap-3">
               <span className="mt-1 h-2 w-2 rounded-full bg-gold-500" />
               <div>
-                <strong>Прохождение курсов</strong> — процент сотрудников, у которых курс полностью завершён (квиз сдан ≥ 70%).
+                <strong>{t("hr.an.note2Title")}</strong> {t("hr.an.note2Body")}
               </div>
             </li>
             <li className="flex gap-3">
               <span className="mt-1 h-2 w-2 rounded-full bg-navy-900/40 dark:bg-white/40" />
               <div>
-                <strong>Распределение XP</strong> — сколько сотрудников в каждой группе по накопленным баллам.
+                <strong>{t("hr.an.note3Title")}</strong> {t("hr.an.note3Body")}
               </div>
             </li>
           </ul>
