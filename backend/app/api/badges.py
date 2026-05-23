@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 
 from app.db.session import get_session
-from app.db.models import Progress, User, ChatMessage, SimulatorSession, CourseProgress
+from app.db.models import Progress, User, ChatMessage, SimulatorSession, CourseProgress, CustomCourse
 from app.simulator.scenarios import SCENARIOS
 from app.courses.catalog import COURSES
 
@@ -140,13 +140,18 @@ async def get_gamification(user_id: int, db: AsyncSession = Depends(get_session)
     ).all()
     completed_course_slugs = {c.course_slug for c in completed_courses}
 
+    custom_slugs = {
+        r for (r,) in (await db.execute(select(CustomCourse.slug))).all()
+    }
+    all_course_slugs = set(COURSES.keys()) | custom_slugs
+
     earned = {
         "first_steps": len(finished_sessions) >= 1,
         "ai_curious": chat_count >= 5,
         "perfectionist": has_perfect,
         "marathoner": finished_scenario_ids >= set(SCENARIOS.keys()),
         "scholar": total_xp >= 200,
-        "course_master": completed_course_slugs >= set(COURSES.keys()),
+        "course_master": all_course_slugs and completed_course_slugs >= all_course_slugs,
     }
 
     badges = [BadgeOut(**b, earned=earned.get(b["id"], False)) for b in BADGE_DEFS]

@@ -1,8 +1,23 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, MessagesSquare, Gamepad2, TrendingUp, Moon, Sun, BookOpen } from "lucide-react";
+import {
+  LayoutDashboard,
+  MessagesSquare,
+  Gamepad2,
+  TrendingUp,
+  Moon,
+  Sun,
+  BookOpen,
+  Users,
+  Trophy,
+  PieChart,
+  Settings,
+  FileText,
+  LogOut,
+} from "lucide-react";
 import { useTheme } from "../theme";
+import { useAuth } from "../state/AuthContext";
 
-const NAV = [
+const NAV_USER = [
   { to: "/", label: "Главная", icon: LayoutDashboard, end: true },
   { to: "/courses", label: "Курсы", icon: BookOpen },
   { to: "/simulator", label: "Симул.", icon: Gamepad2 },
@@ -10,8 +25,27 @@ const NAV = [
   { to: "/progress", label: "Прогр.", icon: TrendingUp },
 ];
 
+const NAV_HR = [
+  { to: "/hr", label: "Обзор", icon: LayoutDashboard, end: true },
+  { to: "/hr/team", label: "Команда", icon: Users },
+  { to: "/hr/leaderboard", label: "Топ", icon: Trophy },
+  { to: "/hr/analytics", label: "Графики", icon: PieChart },
+];
+
+const NAV_ADMIN = [
+  { to: "/admin", label: "Обзор", icon: LayoutDashboard, end: true },
+  { to: "/admin/courses", label: "Курсы", icon: BookOpen },
+  { to: "/admin/regulations", label: "Регл.", icon: FileText },
+  { to: "/admin/users", label: "Польз.", icon: Users },
+  { to: "/admin/settings", label: "Сист.", icon: Settings },
+];
+
 export default function MobileNav() {
   const { theme, toggle } = useTheme();
+  const { user, logout } = useAuth();
+  if (!user) return null;
+  const nav = user.role === "admin" ? NAV_ADMIN : user.role === "hr" ? NAV_HR : NAV_USER;
+
   return (
     <>
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-navy-900/8 bg-white/60 px-4 py-3 backdrop-blur-2xl dark:border-white/8 dark:bg-navy-900/60 md:hidden">
@@ -21,16 +55,25 @@ export default function MobileNav() {
           </div>
           <div className="font-display text-sm font-semibold">AI-Mentor · Turonbank</div>
         </div>
-        <button
-          onClick={toggle}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-900/70 hover:bg-navy-900/5 dark:text-white/70 dark:hover:bg-white/10"
-        >
-          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggle}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-900/70 hover:bg-navy-900/5 dark:text-white/70 dark:hover:bg-white/10"
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            onClick={logout}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-900/70 hover:bg-rose-500/10 hover:text-rose-600 dark:text-white/70"
+            title="Выйти"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
       </div>
 
       <nav className="fixed bottom-3 left-3 right-3 z-30 flex items-center justify-around gap-1 rounded-2xl border border-navy-900/8 bg-white/70 px-1.5 py-2 shadow-glass-lg backdrop-blur-2xl dark:border-white/8 dark:bg-navy-900/70 md:hidden">
-        {NAV.map((item) => (
+        {nav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

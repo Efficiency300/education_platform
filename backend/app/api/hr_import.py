@@ -36,11 +36,15 @@ async def _upsert(db: AsyncSession, payload: UserCreate) -> str:
     )
     if existing:
         existing.full_name = payload.full_name
-        existing.role = payload.role
+        if payload.position:
+            existing.position = payload.position
         existing.department = payload.department
         existing.program = payload.program
         return "updated"
-    db.add(User(**payload.model_dump()))
+    data = payload.model_dump()
+    if not data.get("email"):
+        data["email"] = f"{payload.employee_id.lower()}@imported.turonbank.uz"
+    db.add(User(**data))
     return "created"
 
 
@@ -90,7 +94,8 @@ async def import_csv(
             user = UserCreate(
                 employee_id=row["employee_id"].strip(),
                 full_name=row["full_name"].strip(),
-                role=(row.get("role") or "intern").strip(),
+                role="user",
+                position=(row.get("position") or row.get("role") or "intern").strip(),
                 department=(row.get("department") or "").strip(),
                 program=(row.get("program") or "").strip(),
             )

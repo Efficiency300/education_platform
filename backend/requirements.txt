@@ -12,6 +12,9 @@ anthropic==0.39.0
 python-dotenv==1.0.1
 rank-bm25==0.2.2
 numpy==1.26.4
+bcrypt==4.2.0
+pyjwt==2.9.0
+email-validator==2.2.0
 
 # dev / test
 pytest==8.3.3

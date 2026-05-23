@@ -4,11 +4,11 @@
 Возвращает разбивку по типу + общий процент прохождения.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
-from app.db.models import Progress, User
+from app.db.models import Progress, User, CustomCourse
 from app.schemas.progress import ProgressSummary, ProgressOut, ProgressBreakdown
 from app.simulator.scenarios import SCENARIOS
 from app.courses.catalog import COURSES
@@ -28,7 +28,10 @@ async def get_progress(user_id: int, db: AsyncSession = Depends(get_session)):
         )
     ).all()
 
-    total_units = max(len(SCENARIOS) + len(COURSES), 1)
+    custom_total = await db.scalar(select(func.count(CustomCourse.id))) or 0
+    total_courses = len(COURSES) + int(custom_total)
+    total_units = max(len(SCENARIOS) + total_courses, 1)
+
     overall = sum(r.completion_pct for r in rows) / total_units
     total_points = sum(r.points for r in rows)
 
@@ -39,7 +42,7 @@ async def get_progress(user_id: int, db: AsyncSession = Depends(get_session)):
         simulator_done=len([r for r in sim_rows if r.completion_pct > 0]),
         simulator_total=len(SCENARIOS),
         courses_done=len([r for r in crs_rows if r.completion_pct >= 100.0]),
-        courses_total=len(COURSES),
+        courses_total=total_courses,
     )
 
     return ProgressSummary(

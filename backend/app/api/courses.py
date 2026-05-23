@@ -10,17 +10,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select as sa_select
+
 from app.db.session import get_session
 from app.db.models import (
     User,
     Progress,
     CourseProgress,
     LessonProgress,
+    CustomCourse,
 )
 from app.db.activity import log_activity
 from app.courses.catalog import (
-    list_courses,
-    get_course,
+    list_courses as list_builtin_courses,
+    get_course as get_builtin_course,
     get_lesson,
     course_xp_reward,
 )
@@ -37,6 +40,56 @@ from app.schemas.courses import (
     QuizQuestionResult,
 )
 
+
+def _custom_to_dict(c: CustomCourse) -> dict:
+    return {
+        "slug": c.slug,
+        "title": c.title,
+        "subtitle": c.subtitle or "",
+        "description": c.description or "",
+        "icon": c.icon or "book",
+        "difficulty": c.difficulty or "easy",
+        "estimated_minutes": c.estimated_minutes or 10,
+        "target_scenario_id": c.target_scenario_id or "",
+        "tags": list(c.tags or []),
+        "lessons": list(c.lessons or []),
+        "quiz": list(c.quiz or []),
+    }
+
+
+async def list_courses(db: AsyncSession) -> list[dict]:
+    out = list_builtin_courses()
+    rows = (await db.scalars(sa_select(CustomCourse))).all()
+    for r in rows:
+        d = _custom_to_dict(r)
+        out.append(
+            {
+                "slug": d["slug"],
+                "title": d["title"],
+                "subtitle": d["subtitle"],
+                "description": d["description"],
+                "icon": d["icon"],
+                "difficulty": d["difficulty"],
+                "estimated_minutes": d["estimated_minutes"],
+                "target_scenario_id": d["target_scenario_id"],
+                "tags": d["tags"],
+                "lessons_count": len(d["lessons"]),
+                "quiz_count": len(d["quiz"]),
+            }
+        )
+    return out
+
+
+async def get_course(db: AsyncSession, slug: str) -> dict | None:
+    built = get_builtin_course(slug)
+    if built:
+        return built
+    row = await db.scalar(sa_select(CustomCourse).where(CustomCourse.slug == slug))
+    if not row:
+        return None
+    return _custom_to_dict(row)
+
+
 router = APIRouter(prefix="/courses", tags=["courses"])
 
 PASS_THRESHOLD_PCT = 70.0
@@ -45,7 +98,7 @@ LESSON_POINTS = 10
 
 @router.get("", response_model=list[CourseSummary])
 async def courses_index(user_id: int | None = None, db: AsyncSession = Depends(get_session)):
-    items = list_courses()
+    items = await list_courses(db)
     if not user_id:
         return [CourseSummary(**c) for c in items]
 
@@ -84,7 +137,7 @@ async def course_detail(
     user_id: int | None = None,
     db: AsyncSession = Depends(get_session),
 ):
-    course = get_course(course_slug)
+    course = await get_course(db, course_slug)
     if not course:
         raise HTTPException(404, "Course not found")
 
@@ -150,14 +203,14 @@ async def complete_lesson(
     user = await db.get(User, payload.user_id)
     if not user:
         raise HTTPException(404, "User not found")
-    course = get_course(payload.course_slug)
+    course = await get_course(db, payload.course_slug)
     if not course:
         raise HTTPException(404, "Course not found")
     lesson = get_lesson(course, payload.lesson_slug)
     if not lesson:
         raise HTTPException(404, "Lesson not found")
 
-    await _ensure_course_progress(db, payload.user_id, payload.course_slug)
+    await _ensure_course_progress(db, payload.user_id, payload.course_slug, course_title=course["title"], subtitle=course.get("subtitle", ""))
 
     existing = await db.scalar(
         select(LessonProgress).where(
@@ -225,11 +278,11 @@ async def submit_quiz(
     user = await db.get(User, payload.user_id)
     if not user:
         raise HTTPException(404, "User not found")
-    course = get_course(payload.course_slug)
+    course = await get_course(db, payload.course_slug)
     if not course:
         raise HTTPException(404, "Course not found")
 
-    cp = await _ensure_course_progress(db, payload.user_id, payload.course_slug)
+    cp = await _ensure_course_progress(db, payload.user_id, payload.course_slug, course_title=course["title"], subtitle=course.get("subtitle", ""))
     cp.quiz_attempts = (cp.quiz_attempts or 0) + 1
 
     results: list[QuizQuestionResult] = []
@@ -329,7 +382,12 @@ async def submit_quiz(
 
 
 async def _ensure_course_progress(
-    db: AsyncSession, user_id: int, course_slug: str
+    db: AsyncSession,
+    user_id: int,
+    course_slug: str,
+    *,
+    course_title: str = "",
+    subtitle: str = "",
 ) -> CourseProgress:
     cp = await db.scalar(
         select(CourseProgress).where(
@@ -342,13 +400,12 @@ async def _ensure_course_progress(
     cp = CourseProgress(user_id=user_id, course_slug=course_slug)
     db.add(cp)
     await db.flush()
-    course = get_course(course_slug)
     await log_activity(
         db,
         user_id=user_id,
         kind="course_started",
-        title=f"Начат курс: {course['title']}" if course else "Курс начат",
-        detail=course["subtitle"] if course else "",
+        title=f"Начат курс: {course_title}" if course_title else "Курс начат",
+        detail=subtitle,
         payload={"course_slug": course_slug},
     )
     return cp

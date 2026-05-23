@@ -14,7 +14,11 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_sessio
     existing = await db.scalar(select(User).where(User.employee_id == payload.employee_id))
     if existing:
         return existing
-    user = User(**payload.model_dump())
+    data = payload.model_dump()
+    if not data.get("email"):
+        # синтетический email — иначе уникальный индекс по пустой строке упадёт
+        data["email"] = f"{payload.employee_id.lower()}@imported.turonbank.uz"
+    user = User(**data)
     db.add(user)
     await db.commit()
     await db.refresh(user)

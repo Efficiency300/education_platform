@@ -16,6 +16,10 @@ class Settings(BaseSettings):
 
     regulations_dir: str = "./data/regulations"
 
+    jwt_secret: str = "dev-secret-change-me-in-prod"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_hours: int = 24 * 7
+
     @property
     def regulations_path(self) -> Path:
         return Path(self.regulations_dir).resolve()

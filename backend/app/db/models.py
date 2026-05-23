@@ -10,10 +10,13 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     employee_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, default="")
+    password_hash: Mapped[str] = mapped_column(String(255), default="")
     full_name: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(64), default="intern")  # intern | employee
+    role: Mapped[str] = mapped_column(String(32), default="user")  # user | hr | admin
+    position: Mapped[str] = mapped_column(String(64), default="intern")  # intern | employee
     department: Mapped[str] = mapped_column(String(128), default="")
-    program: Mapped[str] = mapped_column(String(128), default="")  # Kelajakka qadam, etc.
+    program: Mapped[str] = mapped_column(String(128), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     progress: Mapped[list["Progress"]] = relationship(back_populates="user", cascade="all, delete")
@@ -92,6 +95,31 @@ class ActivityEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     user: Mapped["User"] = relationship(back_populates="activity")
+
+
+class CustomCourse(Base):
+    """Курс, добавленный администратором через UI.
+
+    Полная структура (lessons + quiz) хранится как JSON — это гибче,
+    чем дробить на десяток таблиц для MVP.
+    """
+
+    __tablename__ = "custom_courses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    subtitle: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    icon: Mapped[str] = mapped_column(String(32), default="book")
+    difficulty: Mapped[str] = mapped_column(String(16), default="easy")
+    estimated_minutes: Mapped[int] = mapped_column(Integer, default=10)
+    target_scenario_id: Mapped[str] = mapped_column(String(64), default="")
+    tags: Mapped[list | None] = mapped_column(JSON, default=list)
+    lessons: Mapped[list | None] = mapped_column(JSON, default=list)
+    quiz: Mapped[list | None] = mapped_column(JSON, default=list)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class SimulatorSession(Base):

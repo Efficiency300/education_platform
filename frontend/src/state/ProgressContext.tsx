@@ -1,4 +1,13 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   api,
   ActivityItem,
@@ -9,6 +18,7 @@ import {
   ScenarioSummary,
   User,
 } from "../api";
+import { useAuth } from "./AuthContext";
 
 interface Toast {
   id: number;
@@ -40,18 +50,19 @@ export function useProgress(): Ctx {
 }
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useAuth();
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [gamification, setGamification] = useState<Gamification | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastSeq = useRef(0);
   const prevLevel = useRef<number | null>(null);
   const prevBadges = useRef<Set<string>>(new Set());
+  const seededFor = useRef<number | null>(null);
 
   const notify = useCallback((kind: Toast["kind"], text: string) => {
     const id = ++toastSeq.current;
@@ -64,7 +75,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!user) return;
+    if (!user || user.role !== "user") return;
     const [p, g, c, a] = await Promise.all([
       api.progress(user.id).catch(() => null),
       api.badges(user.id).catch(() => null),
@@ -73,12 +84,10 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     ]);
     if (p) setProgress(p);
     if (g) {
-      // detect level-up
       if (prevLevel.current !== null && g.level.level > prevLevel.current) {
         notify("ok", `Новый уровень: ${g.level.title} · уровень ${g.level.level}`);
       }
       prevLevel.current = g.level.level;
-      // detect newly earned badges
       const earnedNow = new Set(g.badges.filter((b) => b.earned).map((b) => b.id));
       if (prevBadges.current.size > 0) {
         for (const id of earnedNow) {
@@ -95,37 +104,47 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     setActivity(a);
   }, [user, notify]);
 
-  // initial bootstrap
+  // bootstrap health + scenarios once (для всех ролей)
   useEffect(() => {
     (async () => {
-      try {
-        const [users, h, scns] = await Promise.all([
-          api.listUsers(),
-          api.health().catch(() => null),
-          api.scenarios().catch(() => []),
-        ]);
-        setUser(users[0] ?? null);
-        setHealth(h);
-        setScenarios(scns);
-      } finally {
-        setLoading(false);
-      }
+      const [h, scns] = await Promise.all([
+        api.health().catch(() => null),
+        api.scenarios().catch(() => []),
+      ]);
+      setHealth(h);
+      setScenarios(scns);
     })();
   }, []);
 
-  // when user is set — pull everything else
+  // подтянуть прогресс при логине обычного пользователя
   useEffect(() => {
-    if (user) {
-      // seed baseline so the first refresh doesn't spam toasts
-      Promise.all([api.badges(user.id).catch(() => null)]).then(([g]) => {
+    if (!user) {
+      setProgress(null);
+      setGamification(null);
+      setCourses([]);
+      setActivity([]);
+      prevLevel.current = null;
+      prevBadges.current = new Set();
+      seededFor.current = null;
+      return;
+    }
+    if (user.role !== "user") return;
+    if (seededFor.current === user.id) return;
+    seededFor.current = user.id;
+    setLoading(true);
+    api
+      .badges(user.id)
+      .then((g) => {
         if (g) {
           prevLevel.current = g.level.level;
           prevBadges.current = new Set(g.badges.filter((b) => b.earned).map((b) => b.id));
           setGamification(g);
         }
-        refresh();
+      })
+      .catch(() => null)
+      .finally(() => {
+        refresh().finally(() => setLoading(false));
       });
-    }
   }, [user, refresh]);
 
   const value = useMemo<Ctx>(
