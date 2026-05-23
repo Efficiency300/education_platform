@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Users, Search, Shield, ShieldCheck, User as UserIcon } from "lucide-react";
-import { api, AdminUser, Role } from "../../api";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, Shield, ShieldCheck, User as UserIcon, Plus, X } from "lucide-react";
+import { api, AdminUser, AdminUserCreate, Role } from "../../api";
 import GlassCard from "../../components/GlassCard";
 import { useAuth } from "../../state/AuthContext";
+import { useT } from "../../state/LocaleContext";
 
-const ROLE_META: Record<Role, { label: string; icon: any; cls: string }> = {
-  user: { label: "User", icon: UserIcon, cls: "bg-navy-900/8 text-navy-900/70 dark:bg-white/10 dark:text-white/70" },
-  hr: { label: "HR", icon: Shield, cls: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
-  admin: { label: "Admin", icon: ShieldCheck, cls: "bg-gradient-to-r from-gold-400/30 to-gold-600/30 text-gold-800 dark:text-gold-200" },
+const ROLE_META: Record<Role, { label: string; icon: any; color: string }> = {
+  user: { label: "User", icon: UserIcon, color: "var(--text-secondary)" },
+  hr: { label: "HR", icon: Shield, color: "#3b82f6" },
+  admin: { label: "Admin", icon: ShieldCheck, color: "var(--brand)" },
 };
 
 export default function AdminUsers() {
   const { user: me } = useAuth();
+  const t = useT();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(() => {
     api.adminListUsers().then(setUsers).catch(console.error);
@@ -38,7 +42,7 @@ export default function AdminUsers() {
       await api.adminUpdateRole(uid, role);
       load();
     } catch (e: any) {
-      alert(e?.detail || e?.message || "Не удалось");
+      alert(e?.detail || e?.message || t("admin.courses.deleteFailed"));
     } finally {
       setBusyId(null);
     }
@@ -46,73 +50,119 @@ export default function AdminUsers() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <Users size={14} className="text-gold-500" /> Управление доступом
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="hero-text">{t("admin.users.title")}</h1>
+          <p className="mt-2 max-w-2xl text-base" style={{ color: "var(--text-secondary)" }}>
+            {t("admin.users.subtitle")}
+          </p>
         </div>
-        <h1 className="hero-text mt-2">Пользователи и роли</h1>
-        <p className="mt-2 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
-          Меняйте роли сотрудников: <strong>user</strong> (проходит обучение),{" "}
-          <strong>hr</strong> (видит аналитику), <strong>admin</strong> (полный доступ).
-        </p>
+        <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+          <Plus size={14} /> {t("admin.users.create")}
+        </button>
       </header>
 
       <GlassCard className="!p-5">
         <div className="relative">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-900/40 dark:text-white/40" />
+          <Search
+            size={14}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+            style={{ color: "var(--text-tertiary)" }}
+          />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Поиск: имя, email, подразделение"
-            className="input !pl-9"
+            placeholder={t("admin.users.searchPh")}
+            className="input"
+            style={{ paddingLeft: 36 }}
           />
         </div>
       </GlassCard>
 
       <GlassCard className="!p-0 overflow-hidden">
-        <div className="grid grid-cols-[1.5fr_1fr_1fr_140px] items-center gap-4 border-b border-navy-900/8 bg-navy-900/[0.02] px-6 py-3 text-[10px] uppercase tracking-widest text-navy-900/50 dark:border-white/8 dark:bg-white/[0.02] dark:text-white/50">
-          <div>Сотрудник</div>
-          <div>Подразделение</div>
-          <div>Создан</div>
-          <div>Роль</div>
+        <div
+          className="grid grid-cols-[1.5fr_1fr_1fr_160px] items-center gap-4 px-6 py-3"
+          style={{
+            borderBottom: "0.5px solid var(--border)",
+            background: "var(--bg-elevated)",
+            fontSize: 10,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            color: "var(--text-tertiary)",
+            fontWeight: 500,
+          }}
+        >
+          <div>{t("admin.users.colEmployee")}</div>
+          <div>{t("admin.users.colDept")}</div>
+          <div>{t("admin.users.colCreated")}</div>
+          <div>{t("admin.users.colRole")}</div>
         </div>
-        <div className="divide-y divide-navy-900/8 dark:divide-white/8">
-          {filtered.map((u) => {
+        <div>
+          {filtered.map((u, i) => {
             const isSelf = me?.id === u.id;
             const meta = ROLE_META[u.role];
             const Icon = meta.icon;
             return (
-              <div key={u.id} className="grid grid-cols-[1.5fr_1fr_1fr_140px] items-center gap-4 px-6 py-3">
+              <div
+                key={u.id}
+                className="grid grid-cols-[1.5fr_1fr_1fr_160px] items-center gap-4 px-6 py-3"
+                style={{
+                  borderTop: i === 0 ? "none" : "0.5px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-xs font-bold text-navy-900">
-                    {u.full_name.slice(0, 1)}
+                  <div
+                    className="flex items-center justify-center"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: "50%",
+                      background: "var(--brand)",
+                      color: "#FFFFFF",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {u.full_name.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">
-                      {u.full_name} {isSelf && <span className="text-[10px] text-gold-700 dark:text-gold-300">(вы)</span>}
+                    <div className="truncate" style={{ fontSize: 13, fontWeight: 600 }}>
+                      {u.full_name}{" "}
+                      {isSelf && <span style={{ fontSize: 10, color: "var(--brand)" }}>({t("common.you")})</span>}
                     </div>
-                    <div className="truncate text-[11px] text-navy-900/50 dark:text-white/50">{u.email}</div>
+                    <div className="truncate" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{u.email}</div>
                   </div>
                 </div>
-                <div className="text-xs text-navy-900/70 dark:text-white/70">
+                <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   <div>{u.department || "—"}</div>
-                  <div className="text-[10px] text-navy-900/40 dark:text-white/40">{u.position}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{u.position}</div>
                 </div>
-                <div className="text-[11px] text-navy-900/50 dark:text-white/50">
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
                   {new Date(u.created_at).toLocaleDateString("ru-RU")}
                 </div>
                 <div>
-                  <div className="mb-1 inline-flex items-center gap-1">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.cls}`}>
-                      <Icon size={10} /> {meta.label}
-                    </span>
+                  <div
+                    className="mb-1 inline-flex items-center gap-1"
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 99,
+                      background: "var(--bg-card)",
+                      border: `0.5px solid ${meta.color}`,
+                      color: meta.color,
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Icon size={10} /> {meta.label}
                   </div>
                   <select
                     value={u.role}
                     onChange={(e) => setRole(u.id, e.target.value as Role)}
                     disabled={busyId === u.id || (isSelf && u.role === "admin")}
-                    className="input !py-1.5 text-xs"
-                    title={isSelf && u.role === "admin" ? "Нельзя понизить свою роль" : ""}
+                    className="input"
+                    style={{ padding: "6px 10px", fontSize: 12 }}
+                    title={isSelf && u.role === "admin" ? t("admin.users.cantDemote") : ""}
                   >
                     <option value="user">user</option>
                     <option value="hr">hr</option>
@@ -122,8 +172,231 @@ export default function AdminUsers() {
               </div>
             );
           })}
+          {filtered.length === 0 && (
+            <div className="p-10 text-center text-sm" style={{ color: "var(--text-tertiary)" }}>
+              —
+            </div>
+          )}
         </div>
       </GlassCard>
+
+      <AnimatePresence>
+        {createOpen && (
+          <CreateUserModal
+            onClose={() => setCreateOpen(false)}
+            onCreated={() => {
+              setCreateOpen(false);
+              load();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function CreateUserModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const t = useT();
+  const [form, setForm] = useState<AdminUserCreate>({
+    email: "",
+    password: "",
+    full_name: "",
+    role: "user",
+    position: "intern",
+    department: "",
+    program: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const upd = <K extends keyof AdminUserCreate>(k: K, v: AdminUserCreate[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.adminCreateUser(form);
+      onCreated();
+    } catch (e: any) {
+      setErr(e?.detail || e?.message || t("admin.users.createFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: 500,
+    color: "var(--text-secondary)",
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
+      style={{ background: "rgba(0,0,0,0.65)" }}
+      onClick={onClose}
+    >
+      <motion.form
+        initial={{ scale: 0.98, y: 10 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.98, y: 6 }}
+        transition={{ duration: 0.15 }}
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        className="my-8 w-full"
+        style={{
+          maxWidth: 480,
+          padding: 28,
+          borderRadius: "var(--radius-xl)",
+          background: "var(--bg-elevated)",
+          border: "0.5px solid var(--border-emphasis)",
+          color: "var(--text-primary)",
+          display: "grid",
+          gap: 16,
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em" }}>
+            {t("admin.users.create")}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("common.cancel")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 32,
+              height: 32,
+              background: "transparent",
+              border: "0.5px solid var(--border)",
+              borderRadius: "var(--radius-sm)",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div>
+          <label style={labelStyle}>{t("auth.register.fullName")}</label>
+          <input
+            value={form.full_name}
+            onChange={(e) => upd("full_name", e.target.value)}
+            className="input"
+            required
+            minLength={2}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>{t("auth.login.emailLabel")}</label>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => upd("email", e.target.value)}
+            className="input"
+            required
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>
+            {t("auth.login.passwordLabel")}{" "}
+            <span style={{ opacity: 0.6 }}>· {t("auth.register.passwordHint")}</span>
+          </label>
+          <input
+            type="text"
+            value={form.password}
+            onChange={(e) => upd("password", e.target.value)}
+            className="input"
+            required
+            minLength={6}
+            autoComplete="off"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label style={labelStyle}>{t("admin.users.colRole")}</label>
+            <select
+              value={form.role}
+              onChange={(e) => upd("role", e.target.value as Role)}
+              className="input"
+            >
+              <option value="user">user</option>
+              <option value="hr">hr</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>{t("auth.register.status")}</label>
+            <select
+              value={form.position}
+              onChange={(e) => upd("position", e.target.value)}
+              className="input"
+            >
+              <option value="intern">{t("position.intern")}</option>
+              <option value="employee">{t("position.employee")}</option>
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label style={labelStyle}>{t("auth.register.department")}</label>
+            <input
+              value={form.department ?? ""}
+              onChange={(e) => upd("department", e.target.value)}
+              className="input"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>{t("auth.register.program")}</label>
+            <input
+              value={form.program ?? ""}
+              onChange={(e) => upd("program", e.target.value)}
+              className="input"
+            />
+          </div>
+        </div>
+
+        {err && (
+          <div
+            style={{
+              padding: "10px 14px",
+              borderRadius: "var(--radius-md)",
+              background: "rgba(240,62,62,0.08)",
+              border: "0.5px solid rgba(240,62,62,0.3)",
+              color: "var(--danger)",
+              fontSize: 13,
+            }}
+          >
+            {err}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-ghost">
+            {t("common.cancel")}
+          </button>
+          <button type="submit" disabled={busy} className="btn-primary">
+            {busy ? t("admin.users.creating") : t("admin.users.create")}
+          </button>
+        </div>
+      </motion.form>
+    </motion.div>
   );
 }

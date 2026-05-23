@@ -7,14 +7,12 @@ import {
   BookOpen,
   Users,
   Trophy,
-  PieChart,
   Settings,
   FileText,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
 import { useT } from "../state/LocaleContext";
-import { LanguageInline } from "./LanguageSwitcher";
 
 export default function MobileNav() {
   const { user, logout } = useAuth();
@@ -29,15 +27,14 @@ export default function MobileNav() {
     { to: "/progress", label: t("nav.progress"), icon: TrendingUp },
   ];
   const navHR = [
-    { to: "/hr", label: t("nav.overview"), icon: LayoutDashboard, end: true },
+    { to: "/hr", label: t("hr.dashboard"), icon: LayoutDashboard, end: true },
     { to: "/hr/team", label: t("nav.team"), icon: Users },
     { to: "/hr/leaderboard", label: t("nav.leaderboard"), icon: Trophy },
-    { to: "/hr/analytics", label: t("nav.analytics"), icon: PieChart },
   ];
   const navAdmin = [
     { to: "/admin", label: t("nav.overview"), icon: LayoutDashboard, end: true },
     { to: "/admin/courses", label: t("nav.courses"), icon: BookOpen },
-    { to: "/admin/regulations", label: t("nav.regulations"), icon: FileText },
+    { to: "/admin/regulations", label: t("nav.knowledge"), icon: FileText },
     { to: "/admin/users", label: t("nav.users"), icon: Users },
     { to: "/admin/settings", label: t("nav.settings"), icon: Settings },
   ];
@@ -53,39 +50,24 @@ export default function MobileNav() {
           borderBottom: "0.5px solid var(--border)",
         }}
       >
-        <div className="flex items-center gap-2">
-          <img src="/logo-icon.svg" alt="KOMPAS" style={{ width: 22, height: 22 }} />
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            KOMPAS
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <LanguageInline />
-          <button
-            onClick={logout}
-            className="flex items-center justify-center"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "var(--radius-sm)",
-              background: "transparent",
-              border: "0.5px solid var(--border)",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-            }}
-            aria-label={t("profile.logout")}
-            title={t("profile.logout")}
-          >
-            <LogOut size={14} />
-          </button>
-        </div>
+        <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 26, width: "auto" }} />
+        <button
+          onClick={logout}
+          className="flex items-center justify-center"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "var(--radius-sm)",
+            background: "transparent",
+            border: "0.5px solid var(--border)",
+            color: "var(--text-secondary)",
+            cursor: "pointer",
+          }}
+          aria-label={t("profile.logout")}
+          title={t("profile.logout")}
+        >
+          <LogOut size={14} />
+        </button>
       </div>
 
       <nav
@@ -122,7 +104,8 @@ export default function MobileNav() {
         ))}
         <style>{`
           .kp-mob-idle { color: var(--text-tertiary); background: transparent; }
-          .kp-mob-active { color: var(--brand); background: var(--brand-subtle); border: 0.5px solid var(--border-brand); }
+          .kp-mob-active, .kp-mob-active:hover { color: #FFFFFF; background: var(--brand); }
+          .kp-mob-active svg { color: #FFFFFF; }
         `}</style>
       </nav>
     </>

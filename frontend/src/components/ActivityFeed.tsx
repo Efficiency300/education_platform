@@ -14,19 +14,21 @@ import {
 import { ActivityItem } from "../api";
 import { useT } from "../state/LocaleContext";
 
-const KIND_META: Record<string, { icon: any; color: string }> = {
-  lesson_completed: { icon: BookOpen, color: "bg-sky-500/15 text-sky-600 dark:text-sky-300" },
-  course_started: { icon: PlayCircle, color: "bg-amber-500/15 text-amber-600 dark:text-amber-300" },
-  course_completed: { icon: GraduationCap, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" },
-  quiz_passed: { icon: CheckCircle2, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" },
-  quiz_failed: { icon: XCircle, color: "bg-rose-500/15 text-rose-600 dark:text-rose-300" },
-  scenario_started: { icon: PlayCircle, color: "bg-amber-500/15 text-amber-600 dark:text-amber-300" },
-  scenario_completed: { icon: Trophy, color: "bg-gold-500/15 text-gold-700 dark:text-gold-300" },
-  chat_asked: { icon: MessagesSquare, color: "bg-navy-900/8 text-navy-900 dark:bg-white/10 dark:text-white" },
-  badge_earned: { icon: Sparkles, color: "bg-gold-500/15 text-gold-700 dark:text-gold-300" },
+type Meta = { icon: any; color: string };
+
+const KIND_META: Record<string, Meta> = {
+  lesson_completed: { icon: BookOpen, color: "var(--brand)" },
+  course_started: { icon: PlayCircle, color: "var(--warning)" },
+  course_completed: { icon: GraduationCap, color: "var(--success)" },
+  quiz_passed: { icon: CheckCircle2, color: "var(--success)" },
+  quiz_failed: { icon: XCircle, color: "var(--danger)" },
+  scenario_started: { icon: PlayCircle, color: "var(--warning)" },
+  scenario_completed: { icon: Trophy, color: "var(--brand)" },
+  chat_asked: { icon: MessagesSquare, color: "var(--text-secondary)" },
+  badge_earned: { icon: Sparkles, color: "var(--brand)" },
 };
 
-const FALLBACK = { icon: Activity, color: "bg-navy-900/8 text-navy-900 dark:bg-white/10 dark:text-white" };
+const FALLBACK: Meta = { icon: Activity, color: "var(--text-secondary)" };
 
 function useRelativeTime() {
   const t = useT();
@@ -60,52 +62,105 @@ export default function ActivityFeed({
 
   if (list.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-navy-900/15 p-8 text-center text-sm text-navy-900/50 dark:border-white/15 dark:text-white/50">
-        <Gamepad2 size={20} className="mx-auto mb-2 opacity-50" />
+      <div
+        className="text-center text-sm"
+        style={{
+          padding: "32px 16px",
+          borderRadius: "var(--radius-lg)",
+          border: "0.5px dashed var(--border-emphasis)",
+          color: "var(--text-tertiary)",
+        }}
+      >
+        <Gamepad2 size={20} className="mx-auto mb-2 opacity-60" />
         {empty}
       </div>
     );
   }
 
   return (
-    <ol className="relative space-y-1 border-l border-navy-900/10 pl-4 dark:border-white/10">
+    <ol
+      className="relative space-y-1 pl-4"
+      style={{ borderLeft: "0.5px solid var(--border-emphasis)" }}
+    >
       {list.map((item, i) => {
         const meta = KIND_META[item.kind] ?? FALLBACK;
         const Icon = meta.icon;
         return (
           <motion.li
             key={item.id}
-            initial={{ opacity: 0, x: -6 }}
+            initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.03 * i }}
+            transition={{ delay: 0.02 * i, duration: 0.18, ease: "easeOut" }}
             className="relative py-2"
           >
-            <span className="absolute -left-[22px] top-3 flex h-4 w-4 items-center justify-center">
-              <span className={`h-4 w-4 rounded-full border-2 border-white dark:border-navy-950 ${meta.color.replace(/text-\S+/g, "").replace("bg-", "bg-")}`} />
-            </span>
+            <span
+              className="absolute flex items-center justify-center"
+              style={{
+                left: -22,
+                top: 12,
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: meta.color,
+                border: "2px solid var(--bg-card)",
+              }}
+            />
             <div className="flex items-start gap-3">
-              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${meta.color}`}>
-                <Icon size={16} />
+              <div
+                className="flex shrink-0 items-center justify-center"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: meta.color === "var(--text-secondary)" ? "var(--bg-hover)" : meta.color,
+                  color: "#FFFFFF",
+                }}
+              >
+                <Icon size={15} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-navy-900/50 dark:text-white/50">
+                    <div
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: "0.10em",
+                        textTransform: "uppercase",
+                        color: "var(--text-tertiary)",
+                        fontWeight: 500,
+                      }}
+                    >
                       {t(`act.${item.kind}`)}
                     </div>
-                    <div className="text-sm font-semibold">{item.title}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                      {item.title}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-navy-900/50 dark:text-white/50">
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
                     {relativeTime(item.created_at)}
                   </div>
                 </div>
                 {item.detail && (
-                  <div className="mt-0.5 truncate text-xs text-navy-900/60 dark:text-white/60">
+                  <div
+                    className="mt-0.5 truncate"
+                    style={{ fontSize: 12, color: "var(--text-secondary)" }}
+                  >
                     {item.detail}
                   </div>
                 )}
                 {item.points > 0 && (
-                  <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold-500/15 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:text-gold-300">
+                  <div
+                    className="mt-1 inline-flex items-center gap-1"
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 99,
+                      background: "var(--brand-subtle)",
+                      border: "0.5px solid var(--border-brand)",
+                      color: "var(--brand)",
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}
+                  >
                     +{item.points} XP
                   </div>
                 )}

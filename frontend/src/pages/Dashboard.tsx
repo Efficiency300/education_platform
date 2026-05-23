@@ -7,7 +7,6 @@ import {
   ArrowUpRight,
   Sparkles,
   Clock,
-  MessagesSquare,
   Award,
   BookOpen,
   Activity as ActivityIcon,
@@ -34,7 +33,7 @@ export default function Dashboard() {
   const t = useT();
   if (!user) return null;
 
-  const firstName = user.full_name.split(" ").slice(-1)[0] || user.full_name;
+  const firstName = user.full_name.trim().split(/\s+/)[0] || user.full_name;
   const earnedBadges = gamification?.badges.filter((b) => b.earned).length ?? 0;
   const recommendedCourse = courses.find((c) => !c.completed) ?? courses[0];
 
@@ -45,17 +44,14 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 100, damping: 20 }}
       >
-        <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
-          <Sparkles size={14} className="text-gold-500" />
+        <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-tertiary)" }}>
+          <Sparkles size={14} style={{ color: "var(--brand)" }} />
           {gamification?.level.title ?? "—"} · {t("common.level")} {gamification?.level.level ?? 1}
         </div>
         <h1 className="hero-text mt-2">
-          {t("dash.hello")},{" "}
-          <span className="bg-gradient-to-r from-navy-900 to-gold-600 bg-clip-text text-transparent dark:from-white dark:to-gold-400">
-            {firstName}
-          </span>
+          {t("common.greet", { name: firstName })}
         </h1>
-        <p className="mt-3 max-w-xl text-base text-navy-900/60 dark:text-white/60">
+        <p className="mt-3 max-w-xl text-base" style={{ color: "var(--text-secondary)" }}>
           {t("dash.programLine", { name: user.program || "—" })}
         </p>
       </motion.section>
@@ -93,8 +89,14 @@ export default function Dashboard() {
                 {progress?.total_points ?? 0}
               </div>
             </div>
-            <div className="rounded-full bg-gold-500/15 p-2.5 text-gold-600 dark:text-gold-400">
-              <Award size={20} />
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: "var(--brand)", color: "#FFFFFF",
+              }}
+            >
+              <Award size={18} />
             </div>
           </div>
           {gamification && (
@@ -118,8 +120,14 @@ export default function Dashboard() {
                 </span>
               </div>
             </div>
-            <div className="rounded-full bg-navy-900/8 p-2.5 dark:bg-white/10">
-              <Sparkles size={20} className="text-gold-500" />
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: "var(--brand)", color: "#FFFFFF",
+              }}
+            >
+              <Sparkles size={18} />
             </div>
           </div>
           <div className="mt-5 flex flex-wrap gap-1.5">
@@ -127,9 +135,8 @@ export default function Dashboard() {
               <div
                 key={b.id}
                 title={b.title}
-                className={`h-2 flex-1 rounded-full transition-all ${
-                  b.earned ? "bg-gradient-to-r from-gold-400 to-gold-600" : "bg-navy-900/8 dark:bg-white/10"
-                }`}
+                className="h-2 flex-1 rounded-full transition-all"
+                style={{ background: b.earned ? "var(--brand)" : "var(--bg-hover)" }}
               />
             ))}
           </div>
@@ -146,8 +153,16 @@ export default function Dashboard() {
         <section>
           <GlassCard strong>
             <div className="flex flex-col gap-5 md:flex-row md:items-center">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 to-gold-600 text-navy-900 shadow-glass">
-                <GraduationCap size={28} />
+              <div
+                className="flex shrink-0 items-center justify-center"
+                style={{
+                  width: 56, height: 56,
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--brand)",
+                  color: "#FFFFFF",
+                }}
+              >
+                <GraduationCap size={26} />
               </div>
               <div className="flex-1">
                 <div className="text-[11px] uppercase tracking-widest text-gold-700 dark:text-gold-300">
@@ -161,9 +176,9 @@ export default function Dashboard() {
                 </p>
                 {!recommendedCourse.completed && recommendedCourse.lessons_count > 0 && (
                   <div className="mt-3 flex items-center gap-3 text-xs text-navy-900/60 dark:text-white/60">
-                    <div className="relative h-1.5 w-40 overflow-hidden rounded-full bg-navy-900/8 dark:bg-white/10">
+                    <div className="kp-progress-track" style={{ width: 160 }}>
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-600"
+                        className="kp-progress-fill"
                         style={{
                           width: `${Math.round(
                             (recommendedCourse.lessons_completed / recommendedCourse.lessons_count) * 100,
@@ -217,8 +232,16 @@ export default function Dashboard() {
                   className="glass group flex h-full flex-col gap-4 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-glass-lg"
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-navy-900 to-navy-700 text-gold-500 shadow-soft dark:from-gold-500 dark:to-gold-700 dark:text-navy-900">
-                      <Icon size={22} strokeWidth={2.2} />
+                    <div
+                      className="flex items-center justify-center"
+                      style={{
+                        width: 44, height: 44,
+                        borderRadius: "var(--radius-md)",
+                        background: "var(--brand)",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      <Icon size={20} strokeWidth={2.2} />
                     </div>
                     {c.completed ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
@@ -251,40 +274,24 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <section>
         <GlassCard className="!p-7">
           <div className="mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <ActivityIcon size={18} className="text-gold-500" /> {t("dash.lastActivity")}
+            <div
+              className="flex items-center gap-2"
+              style={{ fontSize: 17, fontWeight: 700, color: "var(--text-primary)" }}
+            >
+              <ActivityIcon size={18} style={{ color: "var(--brand)" }} /> {t("dash.lastActivity")}
             </div>
             <Link
               to="/progress"
-              className="inline-flex items-center gap-1 text-xs font-medium text-navy-900/60 hover:text-navy-900 dark:text-white/60 dark:hover:text-white"
+              className="inline-flex items-center gap-1 text-xs font-medium"
+              style={{ color: "var(--text-secondary)" }}
             >
               {t("dash.more")} <ArrowUpRight size={12} />
             </Link>
           </div>
           <ActivityFeed items={activity} limit={6} />
-        </GlassCard>
-
-        <GlassCard strong className="!p-7">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-navy-900 to-navy-700 text-gold-500 dark:from-gold-500 dark:to-gold-700 dark:text-navy-900">
-              <MessagesSquare size={20} />
-            </div>
-            <div>
-              <h3 className="font-display text-lg font-semibold">{t("dash.assistant24")}</h3>
-              <p className="text-xs text-navy-900/60 dark:text-white/60">
-                {t("dash.assistantSub")}
-              </p>
-            </div>
-          </div>
-          <p className="mt-4 text-sm text-navy-900/70 dark:text-white/70">
-            {t("dash.assistantBody")}
-          </p>
-          <Link to="/chat" className="btn-primary mt-5 w-full !justify-center">
-            {t("dash.openChat")} <ArrowUpRight size={14} />
-          </Link>
         </GlassCard>
       </section>
     </div>

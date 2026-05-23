@@ -397,6 +397,24 @@ export interface AdminCourseCreate {
   }[];
 }
 
+export type AdminCourseUpdate = Omit<AdminCourseCreate, "slug">;
+
+export interface AdminQuizGenerateRequest {
+  lessons?: AdminCourseCreate["lessons"];
+  material?: string;
+  count?: number;
+}
+
+export interface AdminUserCreate {
+  email: string;
+  password: string;
+  full_name: string;
+  role?: Role;
+  position?: string;
+  department?: string;
+  program?: string;
+}
+
 export interface AdminRegulation {
   filename: string;
   size_bytes: number;
@@ -516,8 +534,23 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  adminUpdateCourse: (id: number, payload: AdminCourseUpdate) =>
+    request<AdminCourse>(`/admin/courses/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  adminGenerateQuiz: (payload: AdminQuizGenerateRequest) =>
+    request<AdminCourseCreate["quiz"]>("/admin/courses/quiz/generate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   adminDeleteCourse: (id: number) =>
     request<{ deleted: boolean }>(`/admin/courses/${id}`, { method: "DELETE" }),
+  adminCreateUser: (payload: AdminUserCreate) =>
+    request<AdminUser>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   adminRegulations: () => request<AdminRegulation[]>("/admin/regulations"),
   adminUploadRegulation: async (file: File) => {
     const fd = new FormData();

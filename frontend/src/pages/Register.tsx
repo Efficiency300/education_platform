@@ -64,12 +64,7 @@ export default function RegisterPage() {
         style={{ maxWidth: 520 }}
       >
         <div className="mb-7 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo-icon.svg" alt="KOMPAS" style={{ width: 30, height: 30 }} />
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
-              KOMPAS
-            </span>
-          </div>
+          <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 26, width: "auto" }} />
           <LanguageInline />
         </div>
 

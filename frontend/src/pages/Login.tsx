@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, ShieldCheck, Building2, ChevronRight } from "lucide-react";
+import { ArrowRight, ShieldCheck, Sparkles, ChevronRight } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
 import { useT } from "../state/LocaleContext";
 import { LanguageInline } from "../components/LanguageSwitcher";
@@ -59,23 +59,22 @@ export default function LoginPage() {
         className="relative hidden flex-col justify-between overflow-hidden lg:flex"
         style={{
           padding: 48,
-          background:
-            "linear-gradient(135deg, #1E1E1E 0%, #242424 60%, rgba(153,75,255,0.08) 100%)",
+          background: "var(--bg-elevated)",
           borderRight: "0.5px solid var(--border)",
         }}
       >
         <div className="flex items-center justify-between">
-          <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 36 }} />
+          <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 32, width: "auto" }} />
           <LanguageInline />
         </div>
 
         <div className="space-y-6">
           <h1
             style={{
-              fontSize: 44,
-              fontWeight: 800,
+              fontSize: 40,
+              fontWeight: 700,
               letterSpacing: "-0.02em",
-              lineHeight: 1.05,
+              lineHeight: 1.1,
               color: "var(--text-primary)",
             }}
           >
@@ -101,34 +100,15 @@ export default function LoginPage() {
               {t("auth.login.heroBullet1")}
             </li>
             <li className="flex items-center gap-2">
-              <Building2 size={16} style={{ color: "var(--brand)" }} />
+              <Sparkles size={16} style={{ color: "var(--brand)" }} />
               {t("auth.login.heroBullet2")}
             </li>
           </ul>
-          <div className="ai-chip" style={{ marginTop: 8 }}>
-            <span className="ai-dot">G</span>
-            Powered by Gemini
-          </div>
         </div>
 
         <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-          v0.4 · production-ready · i18n
+          v0.4
         </div>
-
-        <div
-          aria-hidden
-          style={{
-            pointerEvents: "none",
-            position: "absolute",
-            bottom: -160,
-            right: -160,
-            width: 380,
-            height: 380,
-            borderRadius: "50%",
-            background: "var(--brand-glow)",
-            filter: "blur(80px)",
-          }}
-        />
       </div>
 
       {/* Form panel */}
@@ -141,17 +121,14 @@ export default function LoginPage() {
           style={{ maxWidth: 420 }}
         >
           <div className="mb-8 flex items-center justify-between lg:hidden">
-            <div className="flex items-center gap-2">
-              <img src="/logo-icon.svg" alt="KOMPAS" style={{ width: 26, height: 26 }} />
-              <span style={{ fontSize: 16, fontWeight: 700 }}>KOMPAS</span>
-            </div>
+            <img src="/logo-full.svg" alt="KOMPAS" style={{ height: 22, width: "auto" }} />
             <LanguageInline />
           </div>
 
           <h2
             style={{
-              fontSize: 30,
-              fontWeight: 800,
+              fontSize: 28,
+              fontWeight: 700,
               letterSpacing: "-0.02em",
               color: "var(--text-primary)",
             }}
@@ -179,7 +156,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@turonbank.uz"
+                placeholder="you@kompany.uz"
                 className="input"
                 autoFocus
                 autoComplete="username"
@@ -236,7 +213,7 @@ export default function LoginPage() {
             className="my-6 flex items-center gap-3"
             style={{
               fontSize: 10,
-              letterSpacing: "0.12em",
+              letterSpacing: "0.10em",
               textTransform: "uppercase",
               color: "var(--text-tertiary)",
             }}

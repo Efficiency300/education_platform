@@ -1,10 +1,8 @@
 import { useLocation } from "react-router-dom";
 import { Bell, Search } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
-import { useProgress } from "../state/ProgressContext";
 import { useT } from "../state/LocaleContext";
 
-// Maps the first path segment to a friendly page title.
 function usePageTitle(): { title: string; breadcrumb?: string } {
   const t = useT();
   const { pathname } = useLocation();
@@ -13,15 +11,14 @@ function usePageTitle(): { title: string; breadcrumb?: string } {
   if (seg.length === 0) return { title: t("nav.home") };
 
   if (seg[0] === "hr") {
-    if (seg[1] === "team") return { title: t("nav.team"), breadcrumb: t("hr.kicker") };
-    if (seg[1] === "leaderboard") return { title: t("nav.leaderboard"), breadcrumb: t("hr.kicker") };
-    if (seg[1] === "analytics") return { title: t("nav.analytics"), breadcrumb: t("hr.kicker") };
-    if (seg[1] === "users") return { title: t("hr.profile.kicker"), breadcrumb: t("hr.kicker") };
-    return { title: t("nav.overview"), breadcrumb: t("hr.kicker") };
+    if (seg[1] === "team") return { title: t("nav.team"), breadcrumb: t("hr.dashboard") };
+    if (seg[1] === "leaderboard") return { title: t("nav.leaderboard"), breadcrumb: t("hr.dashboard") };
+    if (seg[1] === "users") return { title: t("hr.profile.kicker"), breadcrumb: t("hr.dashboard") };
+    return { title: t("nav.overview"), breadcrumb: t("hr.dashboard") };
   }
   if (seg[0] === "admin") {
     if (seg[1] === "courses") return { title: t("nav.courses"), breadcrumb: t("admin.kicker") };
-    if (seg[1] === "regulations") return { title: t("nav.regulations"), breadcrumb: t("admin.kicker") };
+    if (seg[1] === "regulations") return { title: t("nav.knowledge"), breadcrumb: t("admin.kicker") };
     if (seg[1] === "users") return { title: t("nav.users"), breadcrumb: t("admin.kicker") };
     if (seg[1] === "settings") return { title: t("nav.settings"), breadcrumb: t("admin.kicker") };
     return { title: t("nav.overview"), breadcrumb: t("admin.kicker") };
@@ -35,7 +32,6 @@ function usePageTitle(): { title: string; breadcrumb?: string } {
 
 export default function Topbar() {
   const { user } = useAuth();
-  const { health } = useProgress();
   const t = useT();
   const { title, breadcrumb } = usePageTitle();
   if (!user) return null;
@@ -50,7 +46,6 @@ export default function Topbar() {
         padding: "0 24px",
         background: "var(--bg-elevated)",
         borderBottom: "0.5px solid var(--border)",
-        backdropFilter: "saturate(140%)",
       }}
     >
       <div className="flex min-w-0 items-center gap-3">
@@ -59,9 +54,10 @@ export default function Topbar() {
             <span
               style={{
                 fontSize: 11,
-                letterSpacing: "0.12em",
+                letterSpacing: "0.10em",
                 textTransform: "uppercase",
                 color: "var(--text-tertiary)",
+                fontWeight: 500,
               }}
             >
               {breadcrumb}
@@ -113,10 +109,6 @@ export default function Topbar() {
       )}
 
       <div className="flex items-center gap-2.5">
-        <div className="ai-chip" title="Powered by Gemini">
-          <span className="ai-dot">G</span>
-          Gemini
-        </div>
         <button
           aria-label="Notifications"
           className="flex items-center justify-center kp-icon-btn"
@@ -133,31 +125,6 @@ export default function Topbar() {
         >
           <Bell size={14} />
         </button>
-        {health && (
-          <span
-            className="hidden lg:inline-flex items-center gap-1"
-            style={{
-              fontSize: 10,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              color: "var(--text-tertiary)",
-              padding: "4px 8px",
-              borderRadius: 99,
-              background: "var(--bg-card)",
-              border: "0.5px solid var(--border)",
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: health.llm_mode === "live" ? "var(--success)" : "var(--warning)",
-              }}
-            />
-            LLM {health.llm_mode}
-          </span>
-        )}
       </div>
       <style>{`
         .kp-icon-btn:hover {

@@ -1,24 +1,27 @@
 """Admin-интерфейс: управление контентом и системой.
 
 Только для роли `admin`. Позволяет:
-- управлять кастомными курсами (создание/удаление)
-- загружать новые регламенты (md)
+- управлять кастомными курсами (создание/редактирование/удаление, авто-квиз)
+- загружать новые документы базы знаний
 - видеть общесистемную статистику
-- управлять пользователями (роли)
+- управлять пользователями (создание, роли)
 """
 import re
+import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.rag import rag_index
 from app.core.config import settings
 from app.core.deps import current_user, require_role
+from app.core.security import hash_password
 from app.courses.catalog import COURSES, list_courses
 from app.db.activity import log_activity
 from app.db.models import (
@@ -121,6 +124,38 @@ class SystemStats(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role: Literal["user", "hr", "admin"]
+
+
+class CourseUpdateRequest(BaseModel):
+    title: str
+    subtitle: str = ""
+    description: str = ""
+    icon: str = "book"
+    difficulty: Literal["easy", "medium", "hard"] = "easy"
+    estimated_minutes: int = 15
+    target_scenario_id: str = ""
+    tags: list[str] = []
+    lessons: list[CourseLessonIn]
+    quiz: list[CourseQuizQuestionIn]
+
+
+class QuizGenerateRequest(BaseModel):
+    """Source material for quiz generation. Either pass `lessons` (the lesson
+    bodies the questions should be based on) or a free-form `material` blob."""
+
+    lessons: list[CourseLessonIn] = []
+    material: str = ""
+    count: int = Field(default=4, ge=1, le=12)
+
+
+class AdminUserCreateRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=128)
+    full_name: str = Field(min_length=2, max_length=255)
+    role: Literal["user", "hr", "admin"] = "user"
+    position: str = "intern"
+    department: str = ""
+    program: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +283,94 @@ async def admin_create_course(
     )
 
 
+@router.put("/courses/{course_id}", response_model=CustomCourseOut)
+async def admin_update_course(
+    course_id: int,
+    payload: CourseUpdateRequest,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    course = await db.get(CustomCourse, course_id)
+    if not course:
+        raise HTTPException(404, "Курс не найден")
+
+    for q in payload.quiz:
+        if not any(o.correct for o in q.options):
+            raise HTTPException(400, f"Вопрос «{q.id}» не содержит правильного ответа")
+
+    course.title = payload.title
+    course.subtitle = payload.subtitle
+    course.description = payload.description
+    course.icon = payload.icon
+    course.difficulty = payload.difficulty
+    course.estimated_minutes = payload.estimated_minutes
+    course.target_scenario_id = payload.target_scenario_id
+    course.tags = payload.tags
+    course.lessons = [l.model_dump() for l in payload.lessons]
+    course.quiz = [q.model_dump() for q in payload.quiz]
+
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="admin_course_updated",
+        title=f"Курс обновлён: {course.title}",
+        detail=f"slug={course.slug}",
+    )
+    await db.commit()
+    await db.refresh(course)
+
+    creator_name: str | None = None
+    if course.created_by:
+        creator = await db.get(User, course.created_by)
+        creator_name = creator.full_name if creator else None
+
+    return CustomCourseOut(
+        id=course.id,
+        slug=course.slug,
+        title=course.title,
+        subtitle=course.subtitle or "",
+        description=course.description or "",
+        icon=course.icon,
+        difficulty=course.difficulty,
+        estimated_minutes=course.estimated_minutes,
+        target_scenario_id=course.target_scenario_id or "",
+        tags=course.tags or [],
+        lessons_count=len(course.lessons or []),
+        quiz_count=len(course.quiz or []),
+        created_at=course.created_at,
+        created_by_name=creator_name,
+        source="custom",
+    )
+
+
+@router.post("/courses/quiz/generate", response_model=list[CourseQuizQuestionIn])
+async def admin_generate_quiz(payload: QuizGenerateRequest):
+    """Generate quiz questions from lesson bodies or arbitrary material.
+
+    Uses Claude when an API key is configured; otherwise falls back to a
+    deterministic, rule-based generator that picks salient sentences from the
+    source text and turns them into single-choice questions. The output is
+    always a list ready to be assigned to ``CustomCourse.quiz``.
+    """
+    if payload.lessons:
+        source = "\n\n".join(
+            f"# {l.title}\n{l.body_md or l.summary}".strip()
+            for l in payload.lessons
+            if (l.body_md or l.summary or l.title).strip()
+        )
+    else:
+        source = payload.material
+
+    source = source.strip()
+    if not source:
+        raise HTTPException(400, "Нет исходного материала для генерации")
+
+    questions = await _generate_quiz_questions(source, payload.count)
+    if not questions:
+        raise HTTPException(422, "Не удалось сгенерировать вопросы")
+    return questions
+
+
 @router.delete("/courses/{course_id}")
 async def admin_delete_course(
     course_id: int,
@@ -368,6 +491,56 @@ async def admin_list_users(db: AsyncSession = Depends(get_session)):
     ]
 
 
+@router.post("/users", status_code=status.HTTP_201_CREATED)
+async def admin_create_user(
+    payload: AdminUserCreateRequest,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    email = payload.email.lower().strip()
+    existing = await db.scalar(select(User).where(User.email == email))
+    if existing:
+        raise HTTPException(409, "Пользователь с таким email уже существует")
+
+    employee_id = f"ADM-{int(datetime.utcnow().timestamp())}-{secrets.token_hex(2)}"
+    new_user = User(
+        employee_id=employee_id,
+        email=email,
+        password_hash=hash_password(payload.password),
+        full_name=payload.full_name,
+        role=payload.role,
+        position=payload.position or "intern",
+        department=payload.department,
+        program=payload.program,
+    )
+    db.add(new_user)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "Пользователь с таким email уже существует")
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="admin_user_created",
+        title=f"Создан пользователь: {new_user.full_name}",
+        detail=f"{new_user.email} · {new_user.role}",
+    )
+    await db.commit()
+    await db.refresh(new_user)
+    return {
+        "id": new_user.id,
+        "employee_id": new_user.employee_id,
+        "email": new_user.email,
+        "full_name": new_user.full_name,
+        "role": new_user.role,
+        "position": new_user.position,
+        "department": new_user.department,
+        "program": new_user.program,
+        "created_at": new_user.created_at,
+    }
+
+
 @router.patch("/users/{user_id}/role")
 async def admin_update_role(
     user_id: int,
@@ -441,3 +614,152 @@ async def admin_stats(db: AsyncSession = Depends(get_session)):
         llm_mode="live" if settings.anthropic_api_key else "mock",
         ispring_mode="live" if settings.ispring_base_url else "mock",
     )
+
+
+# ---------------------------------------------------------------------------
+# Quiz auto-generation
+# ---------------------------------------------------------------------------
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Very small sentence splitter that copes with Cyrillic + Latin text."""
+    cleaned = re.sub(r"```.*?```", " ", text, flags=re.S)
+    cleaned = re.sub(r"^#+\s.*$", " ", cleaned, flags=re.M)
+    cleaned = re.sub(r"[*_`>#-]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    parts = re.split(r"(?<=[.!?])\s+", cleaned)
+    return [p.strip() for p in parts if 30 <= len(p.strip()) <= 220]
+
+
+def _rule_based_quiz(source: str, count: int) -> list[dict]:
+    """Pick salient sentences and make single-choice questions out of them.
+
+    Distractors are derived from other sentences in the source so the wrong
+    answers stay topical instead of being generic noise.
+    """
+    sentences = _split_sentences(source)
+    if not sentences:
+        return []
+
+    seen: set[str] = set()
+    picks: list[str] = []
+    for s in sentences:
+        key = s.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        picks.append(s)
+        if len(picks) >= count:
+            break
+
+    if len(picks) < 2:
+        return []
+
+    quiz: list[dict] = []
+    for i, sentence in enumerate(picks):
+        wrong_pool = [s for s in sentences if s != sentence]
+        secrets.SystemRandom().shuffle(wrong_pool)
+        wrongs = wrong_pool[:2] or [
+            "Это утверждение не относится к материалу урока.",
+            "В уроке не описан такой подход.",
+        ]
+        options = [
+            {"id": "a", "text": sentence, "correct": True},
+            {"id": "b", "text": wrongs[0], "correct": False},
+        ]
+        if len(wrongs) > 1:
+            options.append({"id": "c", "text": wrongs[1], "correct": False})
+        # Shuffle option order so the correct answer isn't always "a".
+        secrets.SystemRandom().shuffle(options)
+        for j, opt in enumerate(options):
+            opt["id"] = chr(ord("a") + j)
+        quiz.append({
+            "id": f"q{i + 1}",
+            "question": "Какое из утверждений соответствует материалу урока?",
+            "options": options,
+            "explanation": sentence,
+        })
+    return quiz
+
+
+def _safe_json_parse(text: str) -> list[dict] | None:
+    import json
+    try:
+        data = json.loads(text)
+    except Exception:
+        # Try to extract a JSON array from a larger response.
+        match = re.search(r"\[.*\]", text, flags=re.S)
+        if not match:
+            return None
+        try:
+            data = json.loads(match.group(0))
+        except Exception:
+            return None
+    if not isinstance(data, list):
+        return None
+    return data
+
+
+async def _generate_quiz_questions(source: str, count: int) -> list[dict]:
+    """Use Claude when available; otherwise fall back to the rule-based path."""
+    if not settings.anthropic_api_key:
+        return _rule_based_quiz(source, count)
+
+    try:
+        import anthropic  # type: ignore
+    except Exception:
+        return _rule_based_quiz(source, count)
+
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    prompt = (
+        "Ты — методист корпоративного обучения. По материалу ниже сгенерируй "
+        f"{count} вопросов с одним правильным ответом и двумя-тремя "
+        "дистракторами. Все варианты должны быть короткими (≤ 120 символов) "
+        "и грамматически согласованными. Ответ верни строго в формате JSON-массива:\n"
+        '[{"id":"q1","question":"...","options":'
+        '[{"id":"a","text":"...","correct":true},'
+        '{"id":"b","text":"...","correct":false}],'
+        '"explanation":"..."}]\n\n'
+        f"Материал:\n{source[:6000]}"
+    )
+    try:
+        msg = await client.messages.create(
+            model="claude-3-5-haiku-latest",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception:
+        return _rule_based_quiz(source, count)
+
+    text = "".join(block.text for block in msg.content if getattr(block, "type", "") == "text")
+    parsed = _safe_json_parse(text)
+    if not parsed:
+        return _rule_based_quiz(source, count)
+
+    # Normalise output so it matches the CourseQuizQuestionIn schema exactly.
+    questions: list[dict] = []
+    for i, q in enumerate(parsed[:count]):
+        if not isinstance(q, dict):
+            continue
+        opts = q.get("options") or []
+        if not isinstance(opts, list) or not opts:
+            continue
+        cleaned_opts: list[dict] = []
+        for j, o in enumerate(opts):
+            if not isinstance(o, dict):
+                continue
+            cleaned_opts.append({
+                "id": str(o.get("id") or chr(ord("a") + j))[:4],
+                "text": str(o.get("text") or "").strip()[:240],
+                "correct": bool(o.get("correct")),
+            })
+        if not any(o["correct"] for o in cleaned_opts) and cleaned_opts:
+            cleaned_opts[0]["correct"] = True
+        questions.append({
+            "id": str(q.get("id") or f"q{i + 1}")[:8],
+            "question": str(q.get("question") or "").strip()[:500],
+            "options": cleaned_opts,
+            "explanation": str(q.get("explanation") or "").strip()[:500],
+        })
+    questions = [q for q in questions if q["question"] and q["options"]]
+    return questions or _rule_based_quiz(source, count)
