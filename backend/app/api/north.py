@@ -19,9 +19,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.agent import (
+    AssessmentQuestion,
+    evaluate_answers,
+    generate_assessment,
+    recommend_course,
+)
 from app.core.deps import current_user, require_role
+from app.courses.catalog import list_courses
 from app.db.activity import log_activity
-from app.db.models import Scenario, User, UserScenarioProgress
+from app.db.models import CourseProgress, CustomCourse, Scenario, User, UserScenarioProgress
 from app.db.session import get_session
 
 
@@ -97,6 +104,15 @@ class NorthRespondRequest(BaseModel):
     step_id: str
 
 
+class NorthNavigate(BaseModel):
+    """Client-side navigation hint. The frontend executes the matching action
+    when it sees this field on a response payload."""
+
+    type: Literal["course", "url"]
+    target: str
+    label: str = ""
+
+
 class NorthRespondOut(BaseModel):
     is_correct: bool | None
     next_step: ScenarioStep | None
@@ -104,6 +120,7 @@ class NorthRespondOut(BaseModel):
     current_step: int
     total_steps: int
     north_state: NorthState
+    navigate: NorthNavigate | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +343,19 @@ async def respond(
     await db.refresh(progress)
 
     next_step = steps[progress.current_step] if progress.current_step < total else None
+
+    # If the step the user just finished pointed at a specific course, ride
+    # that through to the client as a navigate hint. North's frontend hook
+    # consumes ``navigate`` and routes the user there with a tiny delay so the
+    # celebrate animation gets to play first.
+    navigate: NorthNavigate | None = None
+    if current.content_ref:
+        navigate = NorthNavigate(
+            type="course",
+            target=current.content_ref,
+            label=current.content_ref,
+        )
+
     return NorthRespondOut(
         is_correct=is_correct,
         next_step=next_step,
@@ -333,6 +363,7 @@ async def respond(
         current_step=progress.current_step,
         total_steps=total,
         north_state="celebrating" if (is_correct or next_step is None) else (next_step.north_state if next_step else "idle"),
+        navigate=navigate,
     )
 
 
@@ -437,3 +468,184 @@ async def publish_scenario(
     await db.commit()
     await db.refresh(scenario)
     return _scenario_to_out(scenario)
+
+
+# ---------------------------------------------------------------------------
+# Assessment flow ("North runs a skill check after login, then recommends a
+# course to close the gaps")
+# ---------------------------------------------------------------------------
+
+
+class AssessmentStartOut(BaseModel):
+    questions: list[dict]
+    intro: str
+
+
+class AssessmentSubmitRequest(BaseModel):
+    questions: list[dict]
+    answers: dict[str, str]
+
+
+class AssessmentSubmitOut(BaseModel):
+    score: int
+    max: int
+    correct_pct: int
+    gaps: list[str]
+    message: str
+    recommended_course: dict | None
+    navigate: NorthNavigate | None
+
+
+async def _user_catalog(db: AsyncSession, user: User) -> list[dict]:
+    """Return the user's course catalog the same shape the recommender expects."""
+    out: list[dict] = []
+    # Built-in courses.
+    for c in list_courses():
+        out.append(
+            {
+                "slug": c["slug"],
+                "title": c["title"],
+                "subtitle": c.get("subtitle", ""),
+                "description": c.get("description", ""),
+                "tags": c.get("tags", []),
+                "lessons_completed": 0,
+                "completed": False,
+            }
+        )
+    # Custom (admin-built) courses.
+    rows = (await db.scalars(select(CustomCourse))).all()
+    for r in rows:
+        out.append(
+            {
+                "slug": r.slug,
+                "title": r.title,
+                "subtitle": r.subtitle or "",
+                "description": r.description or "",
+                "tags": r.tags or [],
+                "lessons_completed": 0,
+                "completed": False,
+            }
+        )
+    # Overlay this user's progress so the recommender knows what's in-flight.
+    progress_rows = (
+        await db.scalars(
+            select(CourseProgress).where(CourseProgress.user_id == user.id)
+        )
+    ).all()
+    pmap = {p.course_slug: p for p in progress_rows}
+    for course in out:
+        p = pmap.get(course["slug"])
+        if p:
+            course["completed"] = p.completed_at is not None
+            course["lessons_completed"] = 1  # signal "in progress"
+    return out
+
+
+@router.post("/assess/start", response_model=AssessmentStartOut)
+async def assess_start(
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    """Generate a fresh skill-check tailored to the user. The frontend should
+    keep the questions in memory and POST them back to /assess/submit together
+    with the answers so the backend can score without a DB round-trip."""
+    ctx = {
+        "full_name": user.full_name,
+        "job_title": user.job_title or "",
+        "department": user.department or "",
+        "program": user.program or "",
+        "position": user.position or "",
+    }
+    qs = await generate_assessment(user_context=ctx, count=4)
+    intro = (
+        f"Привет, {user.full_name.split()[0] if user.full_name else 'друг'}! "
+        "Я Норс. Давай быстренько проверим, что уже на месте, "
+        "чтобы я подобрал курс под твой уровень."
+    )
+    return AssessmentStartOut(
+        questions=[q.as_dict() for q in qs],
+        intro=intro,
+    )
+
+
+@router.post("/assess/submit", response_model=AssessmentSubmitOut)
+async def assess_submit(
+    payload: AssessmentSubmitRequest,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    # Re-hydrate the questions the client sent us so we can re-use evaluator.
+    questions = [
+        AssessmentQuestion(
+            id=str(q.get("id") or ""),
+            question=str(q.get("question") or ""),
+            options=q.get("options") or [],
+            correct_option_id=str(q.get("correct_option_id") or ""),
+            topic=str(q.get("topic") or "general"),
+            rationale=str(q.get("rationale") or ""),
+        )
+        for q in payload.questions
+        if isinstance(q, dict)
+    ]
+    if not questions:
+        raise HTTPException(400, "Нет вопросов для оценки")
+
+    result = evaluate_answers(questions, payload.answers)
+    ctx = {
+        "job_title": user.job_title or "",
+        "department": user.department or "",
+        "program": user.program or "",
+        "position": user.position or "",
+    }
+    catalog = await _user_catalog(db, user)
+    recommended = await recommend_course(
+        gaps=result["gaps"], user_context=ctx, catalog=catalog
+    )
+
+    navigate = None
+    if recommended:
+        navigate = NorthNavigate(
+            type="course",
+            target=recommended["slug"],
+            label=recommended["title"],
+        )
+
+    # Build the post-assessment message — North speaks to the user directly.
+    if result["correct_pct"] >= 80:
+        tone = "Сильное начало!"
+    elif result["correct_pct"] >= 50:
+        tone = "Хороший старт, есть что подтянуть."
+    else:
+        tone = "Не волнуйся — мы знаем, с чего начать."
+    if recommended:
+        message = (
+            f"{tone} {result['score']} из {result['max']} верно. "
+            f"Закроем пробелы курсом «{recommended['title']}» — я открою его прямо сейчас."
+        )
+    else:
+        message = (
+            f"{tone} {result['score']} из {result['max']} верно. "
+            "Я не нашёл курс под твои пробелы — заглядывай в каталог."
+        )
+
+    await log_activity(
+        db,
+        user_id=user.id,
+        kind="north_assessment_completed",
+        title="Норс провёл мини-тест",
+        detail=f"score={result['score']}/{result['max']}, gaps={','.join(result['gaps'])}",
+    )
+    await db.commit()
+
+    return AssessmentSubmitOut(
+        score=result["score"],
+        max=result["max"],
+        correct_pct=result["correct_pct"],
+        gaps=result["gaps"],
+        message=message,
+        recommended_course={
+            "slug": recommended["slug"],
+            "title": recommended["title"],
+        } if recommended else None,
+        navigate=navigate,
+    )

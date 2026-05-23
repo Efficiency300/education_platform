@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { RotateCw, X } from "lucide-react";
+import { RotateCw, Sparkles, X } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
 import { useT } from "../../state/LocaleContext";
+import NorthAssessment from "./NorthAssessment";
 import NorthBubble from "./NorthBubble";
 import NorthInput from "./NorthInput";
 import NorthMascot from "./NorthMascot";
@@ -147,8 +148,13 @@ function NorthInner() {
     submit,
     reset,
   } = useNorth();
+  const [assessmentOpen, setAssessmentOpen] = useState(false);
 
   const firstName = (user?.full_name || "").trim().split(/\s+/)[0] || "";
+
+  if (assessmentOpen) {
+    return <NorthAssessment onClose={() => setAssessmentOpen(false)} />;
+  }
 
   // ----- empty state (no scenario published for the user's department) ----
   if (!progress?.scenario) {
@@ -161,6 +167,9 @@ function NorthInner() {
         <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
           {t("nors.empty.body", { name: firstName })}
         </p>
+        <button onClick={() => setAssessmentOpen(true)} className="btn-primary">
+          <Sparkles size={14} /> {t("nors.assess.cta")}
+        </button>
       </div>
     );
   }
@@ -177,9 +186,14 @@ function NorthInner() {
         <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
           {t("nors.completed.body")}
         </p>
-        <button onClick={reset} disabled={busy} className="btn-secondary">
-          <RotateCw size={14} /> {t("nors.restart")}
-        </button>
+        <div className="flex flex-wrap gap-2 justify-center">
+          <button onClick={reset} disabled={busy} className="btn-secondary">
+            <RotateCw size={14} /> {t("nors.restart")}
+          </button>
+          <button onClick={() => setAssessmentOpen(true)} className="btn-primary">
+            <Sparkles size={14} /> {t("nors.assess.cta")}
+          </button>
+        </div>
       </div>
     );
   }

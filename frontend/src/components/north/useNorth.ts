@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  NorthNavigate,
   NorthProgressPayload,
   NorthScenarioStep,
   NorthState,
@@ -19,12 +21,26 @@ import {
  * answer, …).
  */
 export function useNorth() {
+  const navigate = useNavigate();
   const [progress, setProgress] = useState<NorthProgressPayload | null>(null);
   const [state, setState] = useState<NorthState>("idle");
   const [isTyping, setIsTyping] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const greetingShown = useRef(false);
+
+  /** Act on a navigate hint coming back from /respond. We wait briefly so the
+   * celebration animation has a chance to play before yanking the route. */
+  const handleNavigate = useCallback(
+    (hint: NorthNavigate | null | undefined) => {
+      if (!hint) return;
+      window.setTimeout(() => {
+        if (hint.type === "course") navigate(`/courses/${hint.target}`);
+        else if (hint.type === "url") window.location.assign(hint.target);
+      }, 600);
+    },
+    [navigate],
+  );
 
   // -- initial fetch ------------------------------------------------------
   const load = useCallback(async () => {
@@ -104,6 +120,9 @@ export function useNorth() {
             next_step: result.next_step,
           };
         });
+        // The /respond endpoint may include a navigate hint when the step we
+        // just finished had a content_ref pointing at a course.
+        handleNavigate(result.navigate);
         if (result.is_correct === false) {
           // Wrong answer: stay on the step, briefly show "surprised", then
           // settle back into the step's resting state so the user can retry.

@@ -695,6 +695,12 @@ export const api = {
   // ---------- North scenarios ----------
   northScenario: () => request<NorthScenarioOut | null>("/north/scenario"),
   northProgress: () => request<NorthProgressPayload>("/north/progress"),
+  northAssessStart: () => request<NorthAssessStart>("/north/assess/start", { method: "POST" }),
+  northAssessSubmit: (questions: NorthAssessmentQuestion[], answers: Record<string, string>) =>
+    request<NorthAssessSubmit>("/north/assess/submit", {
+      method: "POST",
+      body: JSON.stringify({ questions, answers }),
+    }),
   northReset: () =>
     request<NorthProgressPayload>("/north/progress", { method: "POST" }),
   northRespond: (step_id: string, response: string | null) =>
@@ -945,4 +951,38 @@ export interface NorthRespondPayload {
   current_step: number;
   total_steps: number;
   north_state: NorthState;
+  /** Set when the step North just completed had a ``content_ref``. */
+  navigate?: NorthNavigate | null;
+}
+
+// ---------- North agent / assessment / navigate ----------
+
+export interface NorthNavigate {
+  type: "course" | "url";
+  target: string;
+  label: string;
+}
+
+export interface NorthAssessmentQuestion {
+  id: string;
+  topic: string;
+  question: string;
+  options: { id: string; text: string }[];
+  correct_option_id: string;
+  rationale?: string;
+}
+
+export interface NorthAssessStart {
+  questions: NorthAssessmentQuestion[];
+  intro: string;
+}
+
+export interface NorthAssessSubmit {
+  score: number;
+  max: number;
+  correct_pct: number;
+  gaps: string[];
+  message: string;
+  recommended_course: { slug: string; title: string } | null;
+  navigate: NorthNavigate | null;
 }

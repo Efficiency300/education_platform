@@ -13,6 +13,7 @@ from app.db.activity import log_activity
 from app.schemas.chat import ChatRequest, ChatResponse, Source, ChatMessageOut
 from app.ai.rag import rag_index
 from app.ai.llm import generate_answer, stream_answer
+from app.ai.agent import agent_answer
 
 log = logging.getLogger("app.chat")
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -25,8 +26,10 @@ async def ask(payload: ChatRequest, db: AsyncSession = Depends(get_session)):
         raise HTTPException(404, "User not found")
 
     started = time.perf_counter()
-    hits = rag_index.search(payload.message, top_k=4)
-    answer_text = await generate_answer(payload.message, hits)
+    # Route through the LangGraph-backed agent so Gemini drives the answer and
+    # the AI assistant + North share the same reasoning path. The agent runs
+    # RAG itself and returns the citations it actually used.
+    answer_text, hits = await agent_answer(payload.message, top_k=4)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     log.info("chat ask user=%s ms=%s hits=%s", user.id, elapsed_ms, len(hits))
 
