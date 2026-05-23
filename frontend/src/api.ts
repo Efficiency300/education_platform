@@ -64,7 +64,24 @@ export interface User {
   position: string;
   department: string;
   program: string;
+  job_title?: string;
+  avatar_url?: string;
   created_at: string;
+}
+
+export interface UploadOut {
+  url: string;
+  filename: string;
+  size_bytes: number;
+  content_type: string;
+}
+
+export interface LessonAttachment {
+  url: string;
+  filename: string;
+  content_type: string;
+  /** "video" | "presentation" | "image" | "document" — derived by UI. */
+  kind?: string;
 }
 
 export interface AuthResponse {
@@ -208,6 +225,7 @@ export interface CourseLesson {
   summary: string;
   duration_min: number;
   body_md: string;
+  attachments?: LessonAttachment[];
   completed: boolean;
 }
 
@@ -388,6 +406,7 @@ export interface AdminCourseCreate {
     summary: string;
     duration_min: number;
     body_md: string;
+    attachments?: LessonAttachment[];
   }[];
   quiz: {
     id: string;
@@ -578,7 +597,187 @@ export const api = {
       body: JSON.stringify({ role }),
     }),
   adminStats: () => request<AdminStats>("/admin/stats"),
+
+  adminUpdateUser: (user_id: number, payload: AdminUserUpdate) =>
+    request<AdminUser>(`/admin/users/${user_id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Generic file upload (lesson attachments, avatars). */
+  uploadFile: async (file: File): Promise<UploadOut> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/admin/uploads`, {
+      method: "POST",
+      headers: { ...authHeaders() },
+      body: fd,
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new ApiError(res.status, `${res.status}`, t);
+    }
+    return res.json() as Promise<UploadOut>;
+  },
+
+  // ---------- Profile ----------
+  updateProfile: (payload: { full_name?: string; avatar_url?: string }) =>
+    request<User>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  // ---------- Teams ----------
+  listTeams: () => request<TeamSummary[]>("/teams"),
+  createTeam: (payload: { name: string; description?: string; member_user_ids?: number[] }) =>
+    request<TeamSummary>("/teams", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  teamMembers: (team_id: number) => request<TeamMember[]>(`/teams/${team_id}/members`),
+  setTeamMember: (team_id: number, user_id: number, seniority: TeamSeniority) =>
+    request<{ ok: boolean }>(`/teams/${team_id}/members`, {
+      method: "POST",
+      body: JSON.stringify({ user_id, seniority }),
+    }),
+  removeTeamMember: (team_id: number, user_id: number) =>
+    request<{ ok: boolean }>(`/teams/${team_id}/members/${user_id}`, { method: "DELETE" }),
+  joinTeam: (team_id: number) =>
+    request<{ ok: boolean; seniority: TeamSeniority }>(`/teams/${team_id}/join`, { method: "POST" }),
+  teamMessages: (team_id: number, limit = 100) =>
+    request<TeamMessage[]>(`/teams/${team_id}/messages?limit=${limit}`),
+  postTeamMessage: (
+    team_id: number,
+    payload: { content: string; parent_id?: number | null; kind?: "message" | "question" },
+  ) =>
+    request<TeamMessage>(`/teams/${team_id}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  markCanonical: (team_id: number, message_id: number) =>
+    request<{ ok: boolean; knowledge_filename: string }>(
+      `/teams/${team_id}/messages/${message_id}/canonical`,
+      { method: "POST" },
+    ),
+
+  // ---------- Norс flows ----------
+  listFlows: () => request<FlowOut[]>("/flows"),
+  myFlow: () => request<FlowProgress>("/flows/me"),
+  startFlow: (flow_id: number) =>
+    request<FlowProgress>("/flows/me/start", {
+      method: "POST",
+      body: JSON.stringify({ flow_id }),
+    }),
+  advanceFlow: (flow_id: number, answer?: Record<string, unknown>) =>
+    request<FlowProgress>("/flows/me/advance", {
+      method: "POST",
+      body: JSON.stringify({ flow_id, answer: answer ?? null }),
+    }),
+  resetFlow: (flow_id: number) =>
+    request<FlowProgress>("/flows/me/reset", {
+      method: "POST",
+      body: JSON.stringify({ flow_id }),
+    }),
+  adminListFlows: () => request<FlowOut[]>("/admin/flows"),
+  adminCreateFlow: (payload: FlowCreate) =>
+    request<FlowOut>("/admin/flows", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  adminUpdateFlow: (id: number, payload: Partial<Omit<FlowCreate, "slug">>) =>
+    request<FlowOut>(`/admin/flows/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  adminDeleteFlow: (id: number) =>
+    request<{ deleted: boolean }>(`/admin/flows/${id}`, { method: "DELETE" }),
+
+  // ---------- North scenarios ----------
+  northScenario: () => request<NorthScenarioOut | null>("/north/scenario"),
+  northProgress: () => request<NorthProgressPayload>("/north/progress"),
+  northReset: () =>
+    request<NorthProgressPayload>("/north/progress", { method: "POST" }),
+  northRespond: (step_id: string, response: string | null) =>
+    request<NorthRespondPayload>("/north/respond", {
+      method: "POST",
+      body: JSON.stringify({ step_id, response }),
+    }),
+  adminListScenarios: () => request<NorthScenarioOut[]>("/admin/scenarios"),
+  adminCreateScenario: (payload: NorthScenarioCreate) =>
+    request<NorthScenarioOut>("/admin/scenarios", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  adminUpdateScenario: (id: number, payload: Partial<NorthScenarioCreate>) =>
+    request<NorthScenarioOut>(`/admin/scenarios/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  adminDeleteScenario: (id: number) =>
+    request<{ deleted: boolean }>(`/admin/scenarios/${id}`, { method: "DELETE" }),
+  adminPublishScenario: (id: number, status: "draft" | "published") =>
+    request<NorthScenarioOut>(`/admin/scenarios/${id}/publish`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  // ---------- Translation ----------
+  translate: (text: string, target_lang: "ru" | "uz" | "en") =>
+    request<{ text: string; target_lang: string }>("/translate", {
+      method: "POST",
+      body: JSON.stringify({ text, target_lang }),
+    }),
+  translateBulk: (items: Record<string, string>, target_lang: "ru" | "uz" | "en") =>
+    request<{ items: Record<string, string>; target_lang: string }>("/translate/bulk", {
+      method: "POST",
+      body: JSON.stringify({ items, target_lang }),
+    }),
 };
+
+// ---------- Type helpers for the new endpoints ----------
+
+export interface AdminUserUpdate {
+  full_name?: string;
+  role?: Role;
+  position?: string;
+  department?: string;
+  program?: string;
+  job_title?: string;
+  avatar_url?: string;
+}
+
+export type TeamSeniority = "newcomer" | "member" | "senior";
+
+export interface TeamSummary {
+  id: number;
+  name: string;
+  description: string;
+  member_count: number;
+  my_role: TeamSeniority | "none";
+}
+
+export interface TeamMember {
+  user_id: number;
+  full_name: string;
+  email: string;
+  job_title: string;
+  avatar_url: string;
+  seniority: TeamSeniority;
+}
+
+export interface TeamMessage {
+  id: number;
+  parent_id: number | null;
+  author_id: number;
+  author_name: string;
+  author_avatar: string;
+  author_seniority: TeamSeniority;
+  content: string;
+  kind: "message" | "question";
+  canonical: boolean;
+  knowledge_filename: string;
+  created_at: string;
+}
 
 /** Стрим SSE-чата. Возвращает функцию отмены. */
 export interface StreamHandlers {
@@ -639,4 +838,111 @@ export function streamChat(
     }
   })();
   return () => controller.abort();
+}
+
+// ---------- Norс flow types ----------
+
+export interface FlowOption {
+  id: string;
+  label: string;
+}
+
+export type FlowStepKind = "narrative" | "question" | "course";
+
+export interface FlowStep {
+  id: string;
+  kind: FlowStepKind;
+  text: string;
+  options: FlowOption[];
+  correct_option_id?: string | null;
+  course_slug?: string | null;
+  hint?: string;
+}
+
+export interface FlowOut {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  department: string;
+  steps: FlowStep[];
+  updated_at: string;
+}
+
+export interface FlowCreate {
+  slug: string;
+  name: string;
+  description?: string;
+  department?: string;
+  steps?: FlowStep[];
+}
+
+export interface FlowProgress {
+  flow: FlowOut | null;
+  current_step: number;
+  total_steps: number;
+  is_completed: boolean;
+  next_step: FlowStep | null;
+  answers: Record<string, unknown>;
+}
+
+// ---------- North scenario types ----------
+// Renamed (NorthScenario*) to avoid collision with the existing simulator
+// ``Scenario`` / ``ScenarioStep`` types defined further up in this file.
+
+export type NorthState =
+  | "idle"
+  | "thinking"
+  | "celebrating"
+  | "surprised"
+  | "waiting"
+  | "hyped"
+  | "listening";
+
+export type NorthInputType = "text" | "voice" | "choice" | "none";
+
+export interface NorthScenarioStep {
+  id: string;
+  order: number;
+  north_message: string;
+  input_type: NorthInputType;
+  choices: string[];
+  correct_answer?: string | null;
+  north_state: NorthState;
+  on_complete_state: NorthState;
+  content_ref?: string | null;
+}
+
+export interface NorthScenarioOut {
+  id: number;
+  scenario_uid: string;
+  name: string;
+  department: string;
+  status: "draft" | "published";
+  steps: NorthScenarioStep[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NorthScenarioCreate {
+  name: string;
+  department?: string;
+  steps?: NorthScenarioStep[];
+}
+
+export interface NorthProgressPayload {
+  scenario: NorthScenarioOut | null;
+  current_step: number;
+  total_steps: number;
+  completed: boolean;
+  next_step: NorthScenarioStep | null;
+}
+
+export interface NorthRespondPayload {
+  is_correct: boolean | null;
+  next_step: NorthScenarioStep | null;
+  completed: boolean;
+  current_step: number;
+  total_steps: number;
+  north_state: NorthState;
 }

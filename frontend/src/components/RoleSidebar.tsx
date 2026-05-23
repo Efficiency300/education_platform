@@ -10,6 +10,8 @@ import {
   Settings,
   FileText,
   LogOut,
+  UsersRound,
+  Compass,
 } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
 import { useProgress } from "../state/ProgressContext";
@@ -30,18 +32,24 @@ export default function RoleSidebar() {
       { to: "/courses", label: t("nav.courses"), icon: BookOpen },
       { to: "/simulator", label: t("nav.simulator"), icon: Gamepad2 },
       { to: "/chat", label: t("nav.assistant"), icon: MessagesSquare },
+      { to: "/teams", label: t("nav.teams"), icon: UsersRound },
       { to: "/progress", label: t("nav.progress"), icon: TrendingUp },
     ],
     hr: [
       { to: "/hr", label: t("hr.dashboard"), icon: LayoutDashboard, end: true },
       { to: "/hr/team", label: t("nav.team"), icon: Users },
+      { to: "/teams", label: t("nav.teams"), icon: UsersRound },
+      { to: "/chat", label: t("nav.assistant"), icon: MessagesSquare },
       { to: "/hr/leaderboard", label: t("nav.leaderboard"), icon: Trophy },
     ],
     admin: [
       { to: "/admin", label: t("nav.overview"), icon: LayoutDashboard, end: true },
       { to: "/admin/courses", label: t("nav.courses"), icon: BookOpen },
+      { to: "/admin/north-scenarios", label: t("nav.northScenarios"), icon: Compass },
       { to: "/admin/regulations", label: t("nav.knowledge"), icon: FileText },
       { to: "/admin/users", label: t("nav.users"), icon: Users },
+      { to: "/teams", label: t("nav.teams"), icon: UsersRound },
+      { to: "/chat", label: t("nav.assistant"), icon: MessagesSquare },
       { to: "/admin/settings", label: t("nav.settings"), icon: Settings },
     ],
   };

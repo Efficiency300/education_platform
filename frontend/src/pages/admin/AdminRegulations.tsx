@@ -1,143 +1,202 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, Upload, Trash2, RefreshCw } from "lucide-react";
+import { FileText, Upload, Trash2 } from "lucide-react";
 import { api, AdminRegulation } from "../../api";
 import GlassCard from "../../components/GlassCard";
+import { useT } from "../../state/LocaleContext";
 
 export default function AdminRegulations() {
- const [items, setItems] = useState<AdminRegulation[]>([]);
- const [ragChunks, setRagChunks] = useState<number | null>(null);
- const [busy, setBusy] = useState(false);
- const [err, setErr] = useState<string | null>(null);
- const fileRef = useRef<HTMLInputElement>(null);
+  const t = useT();
+  const [items, setItems] = useState<AdminRegulation[]>([]);
+  const [ragChunks, setRagChunks] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
- const load = useCallback(async () => {
- try {
- const [regs, stats] = await Promise.all([api.adminRegulations(), api.adminStats()]);
- setItems(regs);
- setRagChunks(stats.rag_chunks);
- } catch (e: any) {
- setErr(e?.detail || e?.message || "Не удалось загрузить");
- }
- }, []);
+  const load = useCallback(async () => {
+    try {
+      const [regs, stats] = await Promise.all([api.adminRegulations(), api.adminStats()]);
+      setItems(regs);
+      setRagChunks(stats.rag_chunks);
+    } catch (e: any) {
+      setErr(e?.detail || e?.message || "—");
+    }
+  }, []);
 
- useEffect(() => {
- load();
- }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
- const onUpload = async (file: File) => {
- setBusy(true);
- setErr(null);
- try {
- const res = await api.adminUploadRegulation(file);
- setRagChunks(res.rag_chunks);
- await load();
- } catch (e: any) {
- setErr(e?.detail || e?.message || "Не удалось загрузить");
- } finally {
- setBusy(false);
- if (fileRef.current) fileRef.current.value = "";
- }
- };
+  const onUpload = async (file: File) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await api.adminUploadRegulation(file);
+      setRagChunks(res.rag_chunks);
+      await load();
+    } catch (e: any) {
+      setErr(e?.detail || e?.message || "—");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
- const onDelete = async (name: string) => {
- if (!confirm(`Удалить регламент ${name}?`)) return;
- try {
- const res = await api.adminDeleteRegulation(name);
- setRagChunks(res.rag_chunks);
- await load();
- } catch (e: any) {
- setErr(e?.detail || e?.message || "Не удалось удалить");
- }
- };
+  const onDelete = async (name: string) => {
+    if (!confirm(t("admin.regs.confirmDelete", { name }))) return;
+    try {
+      const res = await api.adminDeleteRegulation(name);
+      setRagChunks(res.rag_chunks);
+      await load();
+    } catch (e: any) {
+      setErr(e?.detail || e?.message || "—");
+    }
+  };
 
- return (
- <div className="flex flex-col gap-6">
- <header>
- <div className="flex items-center gap-2 text-sm text-navy-900/50 dark:text-white/50">
- <FileText size={14} className="text-gold-500" /> RAG-контент
- </div>
- <h1 className="hero-text mt-2">Регламенты</h1>
- <p className="mt-2 max-w-2xl text-base text-navy-900/60 dark:text-white/60">
- Markdown-файлы регламентов. После загрузки автоматически переиндексируется
- BM25, AI-наставник начнёт ссылаться на новый контент.
- </p>
- </header>
+  return (
+    <div className="flex flex-col gap-6">
+      <header>
+        <h1 className="hero-text">{t("admin.regs.title")}</h1>
+        <p className="mt-2 max-w-2xl text-base" style={{ color: "var(--text-secondary)" }}>
+          {t("admin.regs.subtitle")}
+        </p>
+      </header>
 
- <GlassCard className="!p-7">
- <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-navy-900/15 bg-white/30 p-8 text-center dark:border-white/15 dark:bg-white/[0.02]">
- <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-white dark: dark: dark:text-navy-900">
- <Upload size={22} />
- </div>
- <div>
- <h3 className="font-display text-lg font-semibold">Загрузить регламент</h3>
- <p className="text-sm text-navy-900/60 dark:text-white/60">
- Принимаются .md файлы до 1 МБ
- </p>
- </div>
- <input
- ref={fileRef}
- type="file"
- accept=".md,text/markdown"
- className="hidden"
- onChange={(e) => {
- const f = e.target.files?.[0];
- if (f) onUpload(f);
- }}
- />
- <button onClick={() => fileRef.current?.click()} disabled={busy} className="btn-gold">
- {busy ? "Загрузка…" : <><Upload size={14} /> Выбрать файл</>}
- </button>
- </div>
- {err && (
- <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
- {err}
- </div>
- )}
- {ragChunks !== null && (
- <div className="mt-4 flex items-center justify-center gap-2 text-xs text-navy-900/60 dark:text-white/60">
- <RefreshCw size={12} /> RAG-индекс: <strong>{ragChunks}</strong> фрагментов
- </div>
- )}
- </GlassCard>
+      <GlassCard className="!p-7">
+        <div
+          className="flex flex-col items-center justify-center gap-4 text-center"
+          style={{
+            padding: 32,
+            border: "0.5px dashed var(--border-emphasis)",
+            borderRadius: "var(--radius-lg)",
+            background: "var(--bg-elevated)",
+          }}
+        >
+          <div
+            className="flex items-center justify-center"
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "var(--radius-md)",
+              background: "var(--brand)",
+              color: "#FFFFFF",
+            }}
+          >
+            <Upload size={22} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
+              {t("admin.regs.uploadTitle")}
+            </h3>
+            <p className="mt-1" style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+              {t("admin.regs.uploadHint")}
+            </p>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUpload(f);
+            }}
+          />
+          <button onClick={() => fileRef.current?.click()} disabled={busy} className="btn-primary">
+            {busy ? "…" : (<><Upload size={14} /> {t("common.chooseFile")}</>)}
+          </button>
+        </div>
+        {err && (
+          <div
+            className="mt-4"
+            style={{
+              padding: "10px 14px",
+              borderRadius: "var(--radius-md)",
+              background: "rgba(240,62,62,0.08)",
+              border: "0.5px solid rgba(240,62,62,0.3)",
+              color: "var(--danger)",
+              fontSize: 13,
+            }}
+          >
+            {err}
+          </div>
+        )}
+        {ragChunks !== null && (
+          <div
+            className="mt-4 text-center"
+            style={{ fontSize: 11, color: "var(--text-tertiary)" }}
+          >
+            {t("admin.regs.indexLine", { n: ragChunks })}
+          </div>
+        )}
+      </GlassCard>
 
- <GlassCard className="!p-0 overflow-hidden">
- <div className="grid grid-cols-[1.5fr_120px_140px_60px] items-center gap-4 border-b border-navy-900/8 bg-navy-900/[0.02] px-6 py-3 text-[10px] uppercase tracking-widest text-navy-900/50 dark:border-white/8 dark:bg-white/[0.02] dark:text-white/50">
- <div>Файл</div>
- <div>Размер</div>
- <div>Обновлён</div>
- <div className="text-right"></div>
- </div>
- <div className="divide-y divide-navy-900/8 dark:divide-white/8">
- {items.map((r) => (
- <div key={r.filename} className="grid grid-cols-[1.5fr_120px_140px_60px] items-center gap-4 px-6 py-3">
- <div className="flex items-center gap-2">
- <FileText size={14} className="text-gold-500" />
- <span className="font-mono text-sm">{r.filename}</span>
- </div>
- <div className="text-xs tabular-nums text-navy-900/70 dark:text-white/70">
- {(r.size_bytes / 1024).toFixed(1)} KB
- </div>
- <div className="text-xs text-navy-900/50 dark:text-white/50">
- {new Date(r.modified_at).toLocaleDateString("ru-RU")}
- </div>
- <div className="text-right">
- <button
- onClick={() => onDelete(r.filename)}
- className="rounded-full p-2 text-rose-600 transition hover:bg-rose-500/10"
- title="Удалить"
- >
- <Trash2 size={14} />
- </button>
- </div>
- </div>
- ))}
- {items.length === 0 && (
- <div className="p-10 text-center text-sm text-navy-900/50 dark:text-white/50">
- Регламенты не загружены.
- </div>
- )}
- </div>
- </GlassCard>
- </div>
- );
+      <GlassCard className="!p-0 overflow-hidden">
+        <div
+          className="grid grid-cols-[1.5fr_120px_140px_60px] items-center gap-4 px-6 py-3"
+          style={{
+            borderBottom: "0.5px solid var(--border)",
+            background: "var(--bg-elevated)",
+            fontSize: 10,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            color: "var(--text-tertiary)",
+            fontWeight: 500,
+          }}
+        >
+          <div>{t("admin.regs.colFile")}</div>
+          <div>{t("admin.regs.colSize")}</div>
+          <div>{t("admin.regs.colUpdated")}</div>
+          <div className="text-right"></div>
+        </div>
+        <div>
+          {items.map((r, i) => (
+            <div
+              key={r.filename}
+              className="grid grid-cols-[1.5fr_120px_140px_60px] items-center gap-4 px-6 py-3"
+              style={{
+                borderTop: i === 0 ? "none" : "0.5px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText size={14} style={{ color: "var(--brand)", flexShrink: 0 }} />
+                <span className="truncate font-mono" style={{ fontSize: 13 }}>{r.filename}</span>
+              </div>
+              <div className="tabular-nums" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                {(r.size_bytes / 1024).toFixed(1)} KB
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                {new Date(r.modified_at).toLocaleDateString("ru-RU")}
+              </div>
+              <div className="text-right">
+                <button
+                  onClick={() => onDelete(r.filename)}
+                  aria-label={t("common.delete")}
+                  title={t("common.delete")}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    background: "transparent",
+                    border: "0.5px solid var(--border)",
+                    borderRadius: "var(--radius-sm)",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+          {items.length === 0 && (
+            <div className="p-10 text-center text-sm" style={{ color: "var(--text-tertiary)" }}>
+              {t("admin.regs.empty")}
+            </div>
+          )}
+        </div>
+      </GlassCard>
+    </div>
+  );
 }

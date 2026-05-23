@@ -21,10 +21,19 @@ class UserOut(BaseModel):
     position: str = "intern"
     department: str
     program: str
+    job_title: str = ""
+    avatar_url: str = ""
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class ProfileUpdateRequest(BaseModel):
+    """User-editable profile fields (no role / job_title — those are admin-managed)."""
+
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    avatar_url: str | None = Field(default=None, max_length=512)
 
 
 # ---------------------------------------------------------------------------

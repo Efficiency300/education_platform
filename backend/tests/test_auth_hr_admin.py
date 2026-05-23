@@ -14,9 +14,9 @@ def _bearer(token: str) -> dict:
 @pytest.mark.asyncio
 async def test_demo_accounts_can_login(client):
     for email, password, role in [
-        ("user@turonbank.uz", "user12345", "user"),
-        ("hr@turonbank.uz", "hr12345", "hr"),
-        ("admin@turonbank.uz", "admin12345", "admin"),
+        ("user@kompas.uz", "user12345", "user"),
+        ("hr@kompas.uz", "hr12345", "hr"),
+        ("admin@kompas.uz", "admin12345", "admin"),
     ]:
         token = await _login(client, email, password)
         me = await client.get("/api/auth/me", headers=_bearer(token))
@@ -28,7 +28,7 @@ async def test_demo_accounts_can_login(client):
 @pytest.mark.asyncio
 async def test_register_creates_user_role(client):
     payload = {
-        "email": "newbie@turonbank.uz",
+        "email": "newbie@kompas.uz",
         "password": "newbie12345",
         "full_name": "Newbie Intern",
         "position": "intern",
@@ -46,7 +46,7 @@ async def test_register_creates_user_role(client):
 @pytest.mark.asyncio
 async def test_register_rejects_duplicate_email(client):
     payload = {
-        "email": "dup@turonbank.uz",
+        "email": "dup@kompas.uz",
         "password": "dupdup12345",
         "full_name": "Dup",
     }
@@ -58,23 +58,23 @@ async def test_register_rejects_duplicate_email(client):
 
 @pytest.mark.asyncio
 async def test_hr_endpoints_require_role(client):
-    user_token = await _login(client, "user@turonbank.uz", "user12345")
+    user_token = await _login(client, "user@kompas.uz", "user12345")
     r = await client.get("/api/hr/team", headers=_bearer(user_token))
     assert r.status_code == 403
 
-    hr_token = await _login(client, "hr@turonbank.uz", "hr12345")
+    hr_token = await _login(client, "hr@kompas.uz", "hr12345")
     r = await client.get("/api/hr/team", headers=_bearer(hr_token))
     assert r.status_code == 200
     team = r.json()
     assert isinstance(team, list)
-    assert any(u["email"] == "user@turonbank.uz" for u in team)
+    assert any(u["email"] == "user@kompas.uz" for u in team)
 
 
 @pytest.mark.asyncio
 async def test_hr_user_profile_has_competency(client):
-    hr_token = await _login(client, "hr@turonbank.uz", "hr12345")
+    hr_token = await _login(client, "hr@kompas.uz", "hr12345")
     team = (await client.get("/api/hr/team", headers=_bearer(hr_token))).json()
-    target = next(u for u in team if u["email"] == "user@turonbank.uz")
+    target = next(u for u in team if u["email"] == "user@kompas.uz")
     res = await client.get(f"/api/hr/users/{target['id']}", headers=_bearer(hr_token))
     assert res.status_code == 200
     body = res.json()
@@ -87,7 +87,7 @@ async def test_hr_user_profile_has_competency(client):
 
 @pytest.mark.asyncio
 async def test_admin_can_create_and_delete_custom_course(client):
-    admin_token = await _login(client, "admin@turonbank.uz", "admin12345")
+    admin_token = await _login(client, "admin@kompas.uz", "admin12345")
     payload = {
         "slug": "test_custom_one",
         "title": "Тестовый курс",
@@ -137,7 +137,7 @@ async def test_admin_can_create_and_delete_custom_course(client):
 
 @pytest.mark.asyncio
 async def test_admin_stats(client):
-    admin_token = await _login(client, "admin@turonbank.uz", "admin12345")
+    admin_token = await _login(client, "admin@kompas.uz", "admin12345")
     res = await client.get("/api/admin/stats", headers=_bearer(admin_token))
     assert res.status_code == 200
     body = res.json()
@@ -149,7 +149,7 @@ async def test_admin_stats(client):
 
 @pytest.mark.asyncio
 async def test_non_admin_cannot_create_course(client):
-    hr_token = await _login(client, "hr@turonbank.uz", "hr12345")
+    hr_token = await _login(client, "hr@kompas.uz", "hr12345")
     res = await client.post(
         "/api/admin/courses",
         json={"slug": "x", "title": "x", "lessons": [], "quiz": []},

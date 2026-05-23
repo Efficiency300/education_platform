@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useProgress } from "../state/ProgressContext";
 import { useT } from "../state/LocaleContext";
+import { useTranslated } from "../state/TranslationContext";
 import { CourseSummary } from "../api";
 
 const ICONS: Record<string, any> = {
@@ -82,6 +83,9 @@ function CourseCard({
  scenarioTitle: string;
 }) {
  const t = useT();
+ const title = useTranslated(course.title);
+ const subtitle = useTranslated(course.subtitle);
+ const description = useTranslated(course.description);
  const Icon = ICONS[course.icon] ?? BookOpen;
  const DIFF: Record<string, { label: string; cls: string }> = {
  easy: { label: t("diff.basic"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
@@ -110,9 +114,9 @@ function CourseCard({
  </div>
  <div className="min-w-0">
  <div className="text-[11px] uppercase tracking-widest text-navy-900/50 dark:text-white/50">
- {course.subtitle}
+ {subtitle}
  </div>
- <h3 className="mt-1 font-display text-lg font-semibold leading-tight">{course.title}</h3>
+ <h3 className="mt-1 font-display text-lg font-semibold leading-tight">{title}</h3>
  </div>
  </div>
  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${diff.cls}`}>
@@ -121,7 +125,7 @@ function CourseCard({
  </div>
 
  <p className="text-sm leading-relaxed text-navy-900/60 dark:text-white/60">
- {course.description}
+ {description}
  </p>
 
  <div className="flex flex-wrap gap-1.5">

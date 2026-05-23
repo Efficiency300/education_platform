@@ -16,6 +16,8 @@ import { api, CourseDetail, QuizSubmitResponse } from "../api";
 import { useProgress } from "../state/ProgressContext";
 import { useT } from "../state/LocaleContext";
 import Markdown from "../components/Markdown";
+import { LessonAttachmentsView } from "../components/LessonAttachments";
+import { useTranslated, useTranslation } from "../state/TranslationContext";
 
 type Mode = "lesson" | "quiz" | "result";
 
@@ -110,15 +112,7 @@ export default function CourseDetailPage() {
  </div>
  </div>
 
- <div>
- <div className="text-[11px] uppercase tracking-widest text-navy-900/50 dark:text-white/50">
- {course.subtitle}
- </div>
- <h1 className="hero-text mt-2">{course.title}</h1>
- <p className="mt-3 max-w-3xl text-base text-navy-900/60 dark:text-white/60">
- {course.description}
- </p>
- </div>
+ <CourseHeader course={course} />
 
  <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
  <aside className="flex flex-col gap-1.5">
@@ -128,36 +122,17 @@ export default function CourseDetailPage() {
  {course.lessons.map((l, idx) => {
  const active = mode === "lesson" && idx === activeLessonIdx;
  return (
- <button
+ <SyllabusItem
  key={l.slug}
+ lesson={l}
+ idx={idx}
+ active={active}
+ t={t}
  onClick={() => {
  setMode("lesson");
  setActiveLessonIdx(idx);
  }}
- className={`group flex items-start gap-3 rounded-2xl border px-3 py-2.5 text-left transition ${
- active
- ? "border-gold-500/40 bg-gold-500/10"
- : "border-navy-900/8 bg-white/40 hover:bg-white/70 dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/8"
- }`}
- >
- <div
- className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
- l.completed
- ? "bg-emerald-500 text-white"
- : active
- ? "bg-gold-500 text-navy-900"
- : "border border-navy-900/15 dark:border-white/20"
- }`}
- >
- {l.completed ? <Check size={13} /> : idx + 1}
- </div>
- <div className="min-w-0 flex-1">
- <div className="truncate text-sm font-semibold">{l.title}</div>
- <div className="mt-0.5 text-[11px] text-navy-900/50 dark:text-white/50">
- {l.duration_min} {t("common.minutes")} · {l.summary}
- </div>
- </div>
- </button>
+ />
  );
  })}
  <button
@@ -211,15 +186,7 @@ export default function CourseDetailPage() {
  </span>
  )}
  </div>
- <h2 className="font-display text-2xl font-semibold tracking-tight">
- {activeLesson.title}
- </h2>
- <p className="mt-1 text-sm text-navy-900/60 dark:text-white/60">
- {activeLesson.summary}
- </p>
- <div className="mt-6">
- <Markdown source={activeLesson.body_md} />
- </div>
+ <LessonContent lesson={activeLesson} t={t} />
  <div className="mt-8 flex items-center justify-between border-t border-navy-900/8 pt-5 dark:border-white/8">
  <button
  disabled={activeLessonIdx === 0}
@@ -425,4 +392,107 @@ export default function CourseDetailPage() {
  </div>
  </div>
  );
+}
+
+function CourseHeader({ course }: { course: { title: string; subtitle: string; description: string; lessons: { title: string; body_md: string }[] } }) {
+  const title = useTranslated(course.title);
+  const subtitle = useTranslated(course.subtitle);
+  const description = useTranslated(course.description);
+  const { ensureMany } = useTranslation();
+
+  // Warm cache for all lesson titles/bodies — the syllabus and active lesson
+  // both render translated copies as soon as they're available.
+  useEffect(() => {
+    const texts: string[] = [];
+    for (const l of course.lessons ?? []) {
+      if (l.title) texts.push(l.title);
+      if (l.body_md) texts.push(l.body_md);
+    }
+    ensureMany(texts);
+  }, [course.lessons, ensureMany]);
+
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-widest text-navy-900/50 dark:text-white/50">
+        {subtitle}
+      </div>
+      <h1 className="hero-text mt-2">{title}</h1>
+      <p className="mt-3 max-w-3xl text-base text-navy-900/60 dark:text-white/60">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function LessonContent({
+  lesson,
+  t,
+}: {
+  lesson: {
+    title: string;
+    summary: string;
+    body_md: string;
+    attachments?: { url: string; filename: string; content_type: string; kind?: string }[];
+  };
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  const title = useTranslated(lesson.title);
+  const summary = useTranslated(lesson.summary);
+  const body = useTranslated(lesson.body_md);
+  void t;
+  return (
+    <>
+      <h2 className="font-display text-2xl font-semibold tracking-tight">{title}</h2>
+      <p className="mt-1 text-sm text-navy-900/60 dark:text-white/60">{summary}</p>
+      <div className="mt-6">
+        <Markdown source={body} />
+      </div>
+      <LessonAttachmentsView items={lesson.attachments ?? []} />
+    </>
+  );
+}
+
+function SyllabusItem({
+  lesson,
+  idx,
+  active,
+  t,
+  onClick,
+}: {
+  lesson: { slug: string; title: string; summary: string; completed: boolean; duration_min: number };
+  idx: number;
+  active: boolean;
+  t: (k: string, p?: Record<string, string | number>) => string;
+  onClick: () => void;
+}) {
+  const title = useTranslated(lesson.title);
+  const summary = useTranslated(lesson.summary);
+  return (
+    <button
+      onClick={onClick}
+      className={`group flex items-start gap-3 rounded-2xl border px-3 py-2.5 text-left transition ${
+        active
+          ? "border-gold-500/40 bg-gold-500/10"
+          : "border-navy-900/8 bg-white/40 hover:bg-white/70 dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/8"
+      }`}
+    >
+      <div
+        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+          lesson.completed
+            ? "bg-emerald-500 text-white"
+            : active
+            ? "bg-gold-500 text-navy-900"
+            : "border border-navy-900/15 dark:border-white/20"
+        }`}
+      >
+        {lesson.completed ? <Check size={13} /> : idx + 1}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold">{title}</div>
+        <div className="mt-0.5 text-[11px] text-navy-900/50 dark:text-white/50">
+          {lesson.duration_min} {t("common.minutes")} · {summary}
+        </div>
+      </div>
+    </button>
+  );
 }

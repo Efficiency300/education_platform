@@ -398,11 +398,16 @@ async def admin_delete_course(
 
 @router.get("/regulations", response_model=list[RegulationOut])
 async def admin_regulations():
+    """List every file inside the knowledge-base directory regardless of
+    extension. Only ``.md`` files end up in the BM25 index, but other formats
+    (PDF, video, presentations) are still listed so admins can manage them."""
     p = settings.regulations_path
     if not p.exists():
         return []
     out = []
-    for f in sorted(p.glob("*.md")):
+    for f in sorted(p.iterdir()):
+        if not f.is_file() or f.name.startswith("."):
+            continue
         st = f.stat()
         out.append(
             RegulationOut(
@@ -414,30 +419,34 @@ async def admin_regulations():
     return out
 
 
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB ceiling per file
+
+
 @router.post("/regulations/upload")
 async def admin_upload_regulation(
     file: UploadFile = File(...),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    if not file.filename or not file.filename.lower().endswith(".md"):
-        raise HTTPException(400, "Только .md файлы")
+    if not file.filename:
+        raise HTTPException(400, "Файл не выбран")
     safe_name = re.sub(r"[^A-Za-z0-9._\-]", "_", file.filename)
     target = settings.regulations_path / safe_name
     settings.regulations_path.mkdir(parents=True, exist_ok=True)
     content = await file.read()
-    if len(content) > 1_000_000:
-        raise HTTPException(413, "Файл больше 1 МБ")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "Файл больше 25 МБ")
     target.write_bytes(content)
 
-    # переиндексируем RAG
+    # Re-index BM25 — only ``.md`` files contribute, but the call is safe to
+    # make on every upload so newly added markdown gets picked up immediately.
     loaded = rag_index.load_dir(settings.regulations_path)
 
     await log_activity(
         db,
         user_id=user.id,
         kind="admin_regulation_uploaded",
-        title=f"Загружен регламент: {safe_name}",
+        title=f"Загружен файл: {safe_name}",
         detail=f"chunks теперь: {loaded}",
     )
     await db.commit()
@@ -564,6 +573,120 @@ async def admin_update_role(
     )
     await db.commit()
     return {"id": target.id, "role": target.role}
+
+
+# ---------------------------------------------------------------------------
+# General-purpose uploads (lesson attachments, avatars)
+# ---------------------------------------------------------------------------
+
+
+class UploadOut(BaseModel):
+    url: str
+    filename: str
+    size_bytes: int
+    content_type: str
+
+
+@router.post("/uploads", response_model=UploadOut)
+async def admin_upload_asset(
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+):
+    """Upload any file (video, PPTX, PDF, image…) and get back a static URL
+    that can be referenced from lessons or user profiles."""
+    if not file.filename:
+        raise HTTPException(400, "Файл не выбран")
+    safe_name = re.sub(r"[^A-Za-z0-9._\-]", "_", file.filename)
+    # Bucket uploads by year/month so the directory doesn't grow into a single
+    # giant folder over time.
+    now = datetime.utcnow()
+    subdir = settings.uploads_path / f"{now.year:04d}" / f"{now.month:02d}"
+    subdir.mkdir(parents=True, exist_ok=True)
+    # Avoid collisions: prefix with a short timestamp + random suffix.
+    target = subdir / f"{int(now.timestamp())}-{secrets.token_hex(3)}-{safe_name}"
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "Файл больше 25 МБ")
+    target.write_bytes(content)
+    rel = target.relative_to(settings.uploads_path).as_posix()
+    return UploadOut(
+        url=f"/static/uploads/{rel}",
+        filename=safe_name,
+        size_bytes=len(content),
+        content_type=file.content_type or "application/octet-stream",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Admin: full user update (role + job_title + department + program + position)
+# ---------------------------------------------------------------------------
+
+
+class AdminUserUpdate(BaseModel):
+    full_name: str | None = None
+    role: Literal["user", "hr", "admin"] | None = None
+    position: str | None = None
+    department: str | None = None
+    program: str | None = None
+    job_title: str | None = None
+    avatar_url: str | None = None
+
+
+@router.patch("/users/{user_id}")
+async def admin_update_user(
+    user_id: int,
+    payload: AdminUserUpdate,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    target = await db.get(User, user_id)
+    if not target:
+        raise HTTPException(404, "Пользователь не найден")
+    if target.id == user.id and payload.role and payload.role != "admin":
+        raise HTTPException(400, "Нельзя понизить собственную роль")
+
+    changes: list[str] = []
+    if payload.full_name is not None and payload.full_name != target.full_name:
+        target.full_name = payload.full_name
+        changes.append("имя")
+    if payload.role is not None and payload.role != target.role:
+        changes.append(f"роль: {target.role} → {payload.role}")
+        target.role = payload.role
+    if payload.position is not None:
+        target.position = payload.position
+    if payload.department is not None:
+        target.department = payload.department
+    if payload.program is not None:
+        target.program = payload.program
+    if payload.job_title is not None and payload.job_title != target.job_title:
+        target.job_title = payload.job_title
+        changes.append(f"должность: «{payload.job_title}»")
+    if payload.avatar_url is not None:
+        target.avatar_url = payload.avatar_url
+
+    if changes:
+        await log_activity(
+            db,
+            user_id=user.id,
+            kind="admin_user_updated",
+            title=f"Профиль обновлён: {target.full_name}",
+            detail=", ".join(changes),
+        )
+    await db.commit()
+    await db.refresh(target)
+    return {
+        "id": target.id,
+        "employee_id": target.employee_id,
+        "email": target.email,
+        "full_name": target.full_name,
+        "role": target.role,
+        "position": target.position,
+        "department": target.department,
+        "program": target.program,
+        "job_title": target.job_title,
+        "avatar_url": target.avatar_url,
+        "created_at": target.created_at,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -701,16 +824,13 @@ def _safe_json_parse(text: str) -> list[dict] | None:
 
 
 async def _generate_quiz_questions(source: str, count: int) -> list[dict]:
-    """Use Claude when available; otherwise fall back to the rule-based path."""
-    if not settings.anthropic_api_key:
+    """Use the configured LLM (Gemini → Anthropic). Fall back to a deterministic
+    rule-based generator if no provider is available or the call fails."""
+    from app.ai.llm import chat_completion  # local import to avoid cycles
+
+    if settings.llm_provider == "mock":
         return _rule_based_quiz(source, count)
 
-    try:
-        import anthropic  # type: ignore
-    except Exception:
-        return _rule_based_quiz(source, count)
-
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = (
         "Ты — методист корпоративного обучения. По материалу ниже сгенерируй "
         f"{count} вопросов с одним правильным ответом и двумя-тремя "
@@ -723,15 +843,10 @@ async def _generate_quiz_questions(source: str, count: int) -> list[dict]:
         f"Материал:\n{source[:6000]}"
     )
     try:
-        msg = await client.messages.create(
-            model="claude-3-5-haiku-latest",
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        text = await chat_completion(prompt, max_tokens=2048, json_mode=True)
     except Exception:
         return _rule_based_quiz(source, count)
 
-    text = "".join(block.text for block in msg.content if getattr(block, "type", "") == "text")
     parsed = _safe_json_parse(text)
     if not parsed:
         return _rule_based_quiz(source, count)

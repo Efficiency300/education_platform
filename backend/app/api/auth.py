@@ -12,7 +12,13 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.db.activity import log_activity
 from app.db.models import User
 from app.db.session import get_session
-from app.schemas.users import AuthResponse, LoginRequest, RegisterRequest, UserOut
+from app.schemas.users import (
+    AuthResponse,
+    LoginRequest,
+    ProfileUpdateRequest,
+    RegisterRequest,
+    UserOut,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -68,4 +74,22 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_session)):
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(current_user)):
+    return user
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_me(
+    payload: ProfileUpdateRequest,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    """Self-service profile update. Users can change their display name and
+    avatar; everything role-related (role, job_title, position, department)
+    stays admin-only."""
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip()
+    if payload.avatar_url is not None:
+        user.avatar_url = payload.avatar_url.strip()
+    await db.commit()
+    await db.refresh(user)
     return user

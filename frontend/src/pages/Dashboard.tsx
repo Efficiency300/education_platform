@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -20,6 +21,8 @@ import XPBar from "../components/XPBar";
 import ActivityFeed from "../components/ActivityFeed";
 import { useProgress } from "../state/ProgressContext";
 import { useT } from "../state/LocaleContext";
+import { useTranslation } from "../state/TranslationContext";
+import NorthPanel from "../components/north/NorthPanel";
 
 const ICON_MAP: Record<string, any> = {
   wallet: Wallet,
@@ -35,10 +38,23 @@ export default function Dashboard() {
 
   const firstName = user.full_name.trim().split(/\s+/)[0] || user.full_name;
   const earnedBadges = gamification?.badges.filter((b) => b.earned).length ?? 0;
-  const recommendedCourse = courses.find((c) => !c.completed) ?? courses[0];
+  const recommendedCourse = pickRecommendedCourse(courses, user);
+  const { translated, ensureMany } = useTranslation();
+
+  // Warm the translation cache for everything we render below so the catalog
+  // and the recommended-course card flip to the active locale in one batch.
+  useEffect(() => {
+    const texts: string[] = [];
+    for (const c of courses) {
+      if (c.title) texts.push(c.title);
+      if (c.subtitle) texts.push(c.subtitle);
+    }
+    ensureMany(texts);
+  }, [courses, ensureMany]);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="north-dashboard-shell">
+      <div className="north-dashboard-main flex flex-col gap-8">
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -51,9 +67,6 @@ export default function Dashboard() {
         <h1 className="hero-text mt-2">
           {t("common.greet", { name: firstName })}
         </h1>
-        <p className="mt-3 max-w-xl text-base" style={{ color: "var(--text-secondary)" }}>
-          {t("dash.programLine", { name: user.program || "—" })}
-        </p>
       </motion.section>
 
       <section className="grid gap-5 md:grid-cols-3">
@@ -169,10 +182,10 @@ export default function Dashboard() {
                   {recommendedCourse.completed ? t("dash.recommended.allDone") : t("dash.recommended.continue")}
                 </div>
                 <h3 className="mt-1 font-display text-xl font-semibold tracking-tight">
-                  {recommendedCourse.title}
+                  {translated(recommendedCourse.title)}
                 </h3>
                 <p className="mt-1 text-sm text-navy-900/60 dark:text-white/60">
-                  {recommendedCourse.subtitle}
+                  {translated(recommendedCourse.subtitle)}
                 </p>
                 {!recommendedCourse.completed && recommendedCourse.lessons_count > 0 && (
                   <div className="mt-3 flex items-center gap-3 text-xs text-navy-900/60 dark:text-white/60">
@@ -254,9 +267,9 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-display text-base font-semibold leading-tight">{c.title}</h3>
+                    <h3 className="font-display text-base font-semibold leading-tight">{translated(c.title)}</h3>
                     <p className="mt-1.5 text-xs leading-relaxed text-navy-900/60 dark:text-white/60">
-                      {c.subtitle}
+                      {translated(c.subtitle)}
                     </p>
                   </div>
                   <div className="flex items-center justify-between border-t border-navy-900/8 pt-4 dark:border-white/8">
@@ -294,6 +307,99 @@ export default function Dashboard() {
           <ActivityFeed items={activity} limit={6} />
         </GlassCard>
       </section>
+      </div>
+      {/* North lives alongside the dashboard — same height, sticky on desktop. */}
+      <NorthPanel />
+      <style>{`
+        .north-dashboard-shell {
+          display: flex;
+          gap: 0;
+          align-items: stretch;
+        }
+        .north-dashboard-main {
+          flex: 1;
+          min-width: 0;
+        }
+        @media (min-width: 768px) {
+          .north-dashboard-main {
+            padding-right: 24px;
+          }
+        }
+      `}</style>
     </div>
   );
+}
+
+/**
+ * Pick the course most relevant to the user's role/program. The score combines:
+ *  - tag overlap with the user's job_title / position / department / program;
+ *  - completion status (in-progress courses beat fresh ones);
+ *  - fallback to the first available course so the card always renders.
+ *
+ * Each "signal" is one or more lowercase tokens compared against course tags
+ * and title text. We deliberately keep this on the client so the dashboard
+ * can re-rank instantly when the user profile changes, without a server hop.
+ */
+function pickRecommendedCourse<T extends {
+  slug: string;
+  title: string;
+  subtitle?: string;
+  tags?: string[];
+  completed: boolean;
+  lessons_completed: number;
+}>(courses: T[], user: {
+  job_title?: string;
+  position?: string;
+  department?: string;
+  program?: string;
+}): T | undefined {
+  if (courses.length === 0) return undefined;
+
+  const tokenize = (s: string) =>
+    s
+      .toLowerCase()
+      .split(/[\s,/_\-+()]+/g)
+      .filter((t) => t.length >= 3);
+
+  const signal = new Set<string>([
+    ...tokenize(user.job_title ?? ""),
+    ...tokenize(user.position ?? ""),
+    ...tokenize(user.department ?? ""),
+    ...tokenize(user.program ?? ""),
+  ]);
+
+  if (signal.size === 0) {
+    // No profile signal — surface the first course the user actually started,
+    // otherwise the first unfinished one.
+    return (
+      courses.find((c) => !c.completed && c.lessons_completed > 0) ??
+      courses.find((c) => !c.completed) ??
+      courses[0]
+    );
+  }
+
+  const scored = courses.map((c) => {
+    const haystack = new Set<string>([
+      ...(c.tags ?? []).map((t) => t.toLowerCase()),
+      ...tokenize(c.title),
+      ...tokenize(c.subtitle ?? ""),
+      ...tokenize(c.slug),
+    ]);
+    let score = 0;
+    for (const token of signal) if (haystack.has(token)) score += 3;
+    if (!c.completed) score += 1;
+    if (c.lessons_completed > 0 && !c.completed) score += 2; // already in progress
+    return { c, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  // If nothing matched profile, fall back to the same logic as no-signal users.
+  if (scored[0].score <= 0) {
+    return (
+      courses.find((c) => !c.completed && c.lessons_completed > 0) ??
+      courses.find((c) => !c.completed) ??
+      courses[0]
+    );
+  }
+  return scored[0].c;
 }

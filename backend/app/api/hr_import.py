@@ -43,7 +43,7 @@ async def _upsert(db: AsyncSession, payload: UserCreate) -> str:
         return "updated"
     data = payload.model_dump()
     if not data.get("email"):
-        data["email"] = f"{payload.employee_id.lower()}@imported.turonbank.uz"
+        data["email"] = f"{payload.employee_id.lower()}@imported.kompas.uz"
     db.add(User(**data))
     return "created"
 

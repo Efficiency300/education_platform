@@ -12,6 +12,8 @@ import CoursesPage from "./pages/Courses";
 import CourseDetailPage from "./pages/CourseDetail";
 import LoginPage, { defaultRoute } from "./pages/Login";
 import RegisterPage from "./pages/Register";
+import Teams from "./pages/Teams";
+import Profile from "./pages/Profile";
 import HRDashboard from "./pages/hr/HRDashboard";
 import HRTeam from "./pages/hr/HRTeam";
 import HRUserProfilePage from "./pages/hr/HRUserProfile";
@@ -22,6 +24,7 @@ import AdminCourses from "./pages/admin/AdminCourses";
 import AdminRegulations from "./pages/admin/AdminRegulations";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminSettings from "./pages/admin/AdminSettings";
+import NorthScenarios from "./pages/admin/NorthScenarios";
 import { useAuth } from "./state/AuthContext";
 import { Role } from "./api";
 
@@ -90,12 +93,17 @@ export default function App() {
 
                 {/* User */}
                 <Route path="/" element={<RoleGuard allow={["user"]} fallback={defaultRoute(user.role)}><Dashboard /></RoleGuard>} />
-                <Route path="/chat" element={<RoleGuard allow={["user"]} fallback={defaultRoute(user.role)}><Chat /></RoleGuard>} />
-                <Route path="/courses" element={<RoleGuard allow={["user"]} fallback={defaultRoute(user.role)}><CoursesPage /></RoleGuard>} />
-                <Route path="/courses/:slug" element={<RoleGuard allow={["user"]} fallback={defaultRoute(user.role)}><CourseDetailPage /></RoleGuard>} />
+                {/* AI assistant + catalog are useful for HR/admin too — drop the user-only guard. */}
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/courses" element={<CoursesPage />} />
+                <Route path="/courses/:slug" element={<CourseDetailPage />} />
                 <Route path="/simulator" element={<RoleGuard allow={["user"]} fallback={defaultRoute(user.role)}><Simulator /></RoleGuard>} />
                 <Route path="/simulator/:scenarioId" element={<RoleGuard allow={["user"]} fallback={defaultRoute(user.role)}><Simulator /></RoleGuard>} />
                 <Route path="/progress" element={<RoleGuard allow={["user"]} fallback={defaultRoute(user.role)}><ProgressPage /></RoleGuard>} />
+
+                {/* Shared (any signed-in user) */}
+                <Route path="/teams" element={<Teams />} />
+                <Route path="/profile" element={<Profile />} />
 
                 {/* HR */}
                 <Route path="/hr" element={<RoleGuard allow={["hr", "admin"]} fallback={defaultRoute(user.role)}><HRDashboard /></RoleGuard>} />
@@ -109,6 +117,7 @@ export default function App() {
                 <Route path="/admin/courses" element={<RoleGuard allow={["admin"]} fallback={defaultRoute(user.role)}><AdminCourses /></RoleGuard>} />
                 <Route path="/admin/regulations" element={<RoleGuard allow={["admin"]} fallback={defaultRoute(user.role)}><AdminRegulations /></RoleGuard>} />
                 <Route path="/admin/users" element={<RoleGuard allow={["admin"]} fallback={defaultRoute(user.role)}><AdminUsers /></RoleGuard>} />
+                <Route path="/admin/north-scenarios" element={<RoleGuard allow={["admin", "hr"]} fallback={defaultRoute(user.role)}><NorthScenarios /></RoleGuard>} />
                 <Route path="/admin/settings" element={<RoleGuard allow={["admin"]} fallback={defaultRoute(user.role)}><AdminSettings /></RoleGuard>} />
 
                 <Route path="*" element={<Navigate to={defaultRoute(user.role)} replace />} />

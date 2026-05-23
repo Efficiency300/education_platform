@@ -6,6 +6,7 @@ import { ThemeProvider } from "./theme";
 import { LocaleProvider } from "./state/LocaleContext";
 import { AuthProvider } from "./state/AuthContext";
 import { ProgressProvider } from "./state/ProgressContext";
+import { TranslationProvider } from "./state/TranslationContext";
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <BrowserRouter>
           <AuthProvider>
             <ProgressProvider>
-              <App />
+              <TranslationProvider>
+                <App />
+              </TranslationProvider>
             </ProgressProvider>
           </AuthProvider>
         </BrowserRouter>

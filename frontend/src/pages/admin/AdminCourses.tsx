@@ -19,6 +19,7 @@ import {
   ScenarioSummary,
 } from "../../api";
 import GlassCard from "../../components/GlassCard";
+import { LessonAttachmentsEditor } from "../../components/LessonAttachments";
 import { useProgress } from "../../state/ProgressContext";
 import { useT } from "../../state/LocaleContext";
 
@@ -605,6 +606,10 @@ function CourseEditor({
                   className="input mt-2"
                   style={{ padding: "8px 12px", fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12 }}
                   rows={4}
+                />
+                <LessonAttachmentsEditor
+                  items={l.attachments ?? []}
+                  onChange={(next) => updLesson(i, { attachments: next })}
                 />
               </div>
             ))}

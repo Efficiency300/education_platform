@@ -17,7 +17,7 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_sessio
     data = payload.model_dump()
     if not data.get("email"):
         # синтетический email — иначе уникальный индекс по пустой строке упадёт
-        data["email"] = f"{payload.employee_id.lower()}@imported.turonbank.uz"
+        data["email"] = f"{payload.employee_id.lower()}@imported.kompas.uz"
     user = User(**data)
     db.add(user)
     await db.commit()

@@ -17,6 +17,10 @@ class User(Base):
     position: Mapped[str] = mapped_column(String(64), default="intern")  # intern | employee
     department: Mapped[str] = mapped_column(String(128), default="")
     program: Mapped[str] = mapped_column(String(128), default="")
+    # Free-form job grade — set by admin (e.g. "Senior Developer", "QA Lead").
+    job_title: Mapped[str] = mapped_column(String(128), default="")
+    # Avatar served from /static/uploads or an absolute URL.
+    avatar_url: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     progress: Mapped[list["Progress"]] = relationship(back_populates="user", cascade="all, delete")
@@ -135,3 +139,179 @@ class SimulatorSession(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="sessions")
+
+
+# ---------------------------------------------------------------------------
+# Teams + group chat (knowledge from senior colleagues)
+# ---------------------------------------------------------------------------
+
+
+class Team(Base):
+    """A working team (e.g. "Backend", "QA"). Hosts a group chat where newcomers
+    ask questions and seniors answer; admins promote the canonical answers
+    into the knowledge base."""
+
+    __tablename__ = "teams"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    members: Mapped[list["TeamMembership"]] = relationship(
+        back_populates="team", cascade="all, delete-orphan"
+    )
+    messages: Mapped[list["TeamMessage"]] = relationship(
+        back_populates="team", cascade="all, delete-orphan"
+    )
+
+
+class TeamMembership(Base):
+    """Maps users to teams + their seniority within that team."""
+
+    __tablename__ = "team_memberships"
+    __table_args__ = (UniqueConstraint("team_id", "user_id", name="uq_team_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # newcomer | member | senior — controls who can mark canonical answers
+    seniority: Mapped[str] = mapped_column(String(32), default="member")
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    team: Mapped["Team"] = relationship(back_populates="members")
+    user: Mapped["User"] = relationship()
+
+
+class TeamMessage(Base):
+    """One message in a team's group chat. ``parent_id`` lets replies attach to
+    a specific question; the question + the answer marked as canonical are what
+    we sync into the knowledge base."""
+
+    __tablename__ = "team_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("team_messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), default="message")  # message | question
+    content: Mapped[str] = mapped_column(Text)
+    # Set when a senior / admin marks this reply as the canonical answer.
+    canonical: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Once promoted to the knowledge base, store the resulting filename so we
+    # can avoid duplicates and remove the file if the message is deleted.
+    knowledge_filename: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    team: Mapped["Team"] = relationship(back_populates="messages")
+    author: Mapped["User"] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# Норс — guided onboarding flow
+# ---------------------------------------------------------------------------
+
+
+class OnboardingFlow(Base):
+    """A scripted onboarding journey ("Flow") that the Норс mascot walks a
+    newcomer through. Each flow targets a department and contains an ordered
+    list of steps.
+
+    A step is a plain dict in JSON with at minimum:
+      - ``id``     unique within the flow
+      - ``kind``   "narrative" | "question" | "course"
+      - ``text``   storytelling text shown by Норс
+    Question steps add ``options`` (a list of dicts with ``id`` and
+    ``label``) and ``correct_option_id``. Course steps add a ``course_slug``
+    that links the user to a specific course."""
+
+    __tablename__ = "onboarding_flows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text, default="")
+    department: Mapped[str] = mapped_column(String(128), default="")
+    steps: Mapped[list | None] = mapped_column(JSON, default=list)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class UserFlowProgress(Base):
+    """Per-user pointer into one flow plus the answers they've given so far."""
+
+    __tablename__ = "user_flow_progress"
+    __table_args__ = (UniqueConstraint("user_id", "flow_id", name="uq_user_flow"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    flow_id: Mapped[int] = mapped_column(ForeignKey("onboarding_flows.id", ondelete="CASCADE"), index=True)
+    # Index of the next step the user needs to see. ``len(flow.steps)`` means done.
+    current_step: Mapped[int] = mapped_column(Integer, default=0)
+    # Map of step_id → answer payload, used to remember which option a user
+    # picked on each question step and feed it back into the narrative later.
+    answers: Mapped[dict | None] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# North — scenario-driven mascot bot
+# ---------------------------------------------------------------------------
+
+
+class Scenario(Base):
+    """A scenario the North mascot walks newcomers through.
+
+    The ``steps`` JSON column stores a list of step dicts, each with shape:
+        {id, order, north_message, input_type, choices?, correct_answer?,
+         north_state, on_complete_state, content_ref?}
+    Keeping it as JSON keeps the dev velocity high — admins can add fields
+    in the future without a migration.
+    """
+
+    __tablename__ = "scenarios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Public-facing identifier so URLs / dedupe checks don't expose the PK.
+    scenario_uid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    department: Mapped[str] = mapped_column(String(128), default="")
+    # "draft" | "published" — only published scenarios are visible to newcomers.
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    steps: Mapped[list | None] = mapped_column(JSON, default=list)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class UserScenarioProgress(Base):
+    """Per-user pointer into one scenario. ``current_step`` equals
+    ``len(steps)`` when the scenario has been completed."""
+
+    __tablename__ = "user_scenario_progress"
+    __table_args__ = (UniqueConstraint("user_id", "scenario_id", name="uq_user_scenario"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    scenario_id: Mapped[int] = mapped_column(ForeignKey("scenarios.id", ondelete="CASCADE"), index=True)
+    current_step: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

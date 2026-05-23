@@ -1,5 +1,4 @@
-import { useLocation } from "react-router-dom";
-import { Bell, Search } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useT } from "../state/LocaleContext";
 
@@ -27,16 +26,17 @@ function usePageTitle(): { title: string; breadcrumb?: string } {
   if (seg[0] === "simulator") return { title: t("nav.simulator") };
   if (seg[0] === "chat") return { title: t("nav.assistant") };
   if (seg[0] === "progress") return { title: t("nav.progress") };
+  if (seg[0] === "teams") return { title: t("nav.teams") };
+  if (seg[0] === "profile") return { title: t("nav.profile") };
   return { title: t("nav.home") };
 }
 
 export default function Topbar() {
   const { user } = useAuth();
-  const t = useT();
   const { title, breadcrumb } = usePageTitle();
   if (!user) return null;
 
-  const canSearch = user.role === "hr" || user.role === "admin";
+  const firstInitial = user.full_name.trim().slice(0, 1).toUpperCase();
 
   return (
     <header
@@ -78,60 +78,46 @@ export default function Topbar() {
         </h1>
       </div>
 
-      {canSearch && (
-        <div
-          className="hidden lg:flex items-center gap-2"
-          style={{
-            background: "var(--bg-input)",
-            border: "0.5px solid var(--border-emphasis)",
-            borderRadius: "var(--radius-md)",
-            padding: "6px 12px",
-            minWidth: 260,
-            maxWidth: 360,
-            flex: "0 1 320px",
-          }}
-        >
-          <Search size={14} style={{ color: "var(--text-tertiary)" }} />
-          <input
-            placeholder={t("common.search")}
-            style={{
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: 12,
-              color: "var(--text-primary)",
-              width: "100%",
-              fontFamily: "var(--font-kompas)",
-            }}
-            readOnly
+      <Link
+        to="/profile"
+        aria-label="Profile"
+        className="flex items-center gap-2 kp-topbar-profile"
+        style={{
+          padding: "4px 12px 4px 4px",
+          borderRadius: 99,
+          background: "var(--bg-card)",
+          border: "0.5px solid var(--border)",
+          color: "var(--text-primary)",
+          textDecoration: "none",
+          transition: "all 0.15s ease",
+        }}
+      >
+        {user.avatar_url ? (
+          <img
+            src={user.avatar_url}
+            alt=""
+            style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }}
           />
-        </div>
-      )}
-
-      <div className="flex items-center gap-2.5">
-        <button
-          aria-label="Notifications"
-          className="flex items-center justify-center kp-icon-btn"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "var(--radius-md)",
-            background: "var(--bg-card)",
-            border: "0.5px solid var(--border)",
-            color: "var(--text-secondary)",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-          }}
-        >
-          <Bell size={14} />
-        </button>
-      </div>
+        ) : (
+          <span
+            className="flex items-center justify-center"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              background: "var(--brand)",
+              color: "#FFFFFF",
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            {firstInitial}
+          </span>
+        )}
+        <span style={{ fontSize: 12, fontWeight: 500 }}>{user.full_name.split(" ")[0]}</span>
+      </Link>
       <style>{`
-        .kp-icon-btn:hover {
-          color: var(--text-primary);
-          border-color: var(--border-emphasis);
-          background: var(--bg-hover);
-        }
+        .kp-topbar-profile:hover { border-color: var(--border-emphasis); background: var(--bg-hover); }
       `}</style>
     </header>
   );

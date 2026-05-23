@@ -25,6 +25,8 @@ interface AuthCtx {
   logout: () => void;
   hasRole: (...roles: Role[]) => boolean;
   refreshMe: () => Promise<void>;
+  /** Lets pages update the cached User after a profile edit. */
+  setUser: (u: User) => void;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -110,7 +112,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthCtx>(
-    () => ({ user, loading, error, login, register, logout, hasRole, refreshMe }),
+    () => ({
+      user,
+      loading,
+      error,
+      login,
+      register,
+      logout,
+      hasRole,
+      refreshMe,
+      setUser,
+    }),
     [user, loading, error, login, register, logout, hasRole, refreshMe],
   );
 

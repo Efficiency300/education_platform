@@ -230,6 +230,7 @@ export default function Chat() {
         </p>
       </div>
 
+      {/* North now lives on the dashboard as its own panel — no more tab here. */}
       <div
         className="grid gap-4"
         style={{ gridTemplateColumns: "minmax(0, 260px) minmax(0, 1fr)" }}

@@ -23,9 +23,9 @@ export default function LoginPage() {
   }
 
   const demo = [
-    { label: "User", email: "user@turonbank.uz", password: "user12345", role: t("auth.demo.userRole") },
-    { label: "HR", email: "hr@turonbank.uz", password: "hr12345", role: t("auth.demo.hrRole") },
-    { label: "Admin", email: "admin@turonbank.uz", password: "admin12345", role: t("auth.demo.adminRole") },
+    { label: "User", email: "user@kompas.uz", password: "user12345", role: t("auth.demo.userRole") },
+    { label: "HR", email: "hr@kompas.uz", password: "hr12345", role: t("auth.demo.hrRole") },
+    { label: "Admin", email: "admin@kompas.uz", password: "admin12345", role: t("auth.demo.adminRole") },
   ];
 
   const submit = async (e: FormEvent) => {

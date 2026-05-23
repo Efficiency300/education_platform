@@ -29,7 +29,7 @@ async def user_id(client, request):
         "/api/users",
         json={
             "employee_id": eid,
-            "email": f"{eid.lower()}@qa.turonbank.uz",
+            "email": f"{eid.lower()}@qa.kompas.uz",
             "full_name": "Test User",
             "role": "user",
             "position": "intern",

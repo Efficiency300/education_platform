@@ -68,9 +68,9 @@ export default function AdminSettings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-navy-900/8 dark:divide-white/8">
-              <tr><td className="px-4 py-2 font-semibold">User</td><td className="px-4 py-2 font-mono">user@turonbank.uz</td><td className="px-4 py-2 font-mono">user12345</td></tr>
-              <tr><td className="px-4 py-2 font-semibold">HR</td><td className="px-4 py-2 font-mono">hr@turonbank.uz</td><td className="px-4 py-2 font-mono">hr12345</td></tr>
-              <tr><td className="px-4 py-2 font-semibold">Admin</td><td className="px-4 py-2 font-mono">admin@turonbank.uz</td><td className="px-4 py-2 font-mono">admin12345</td></tr>
+              <tr><td className="px-4 py-2 font-semibold">User</td><td className="px-4 py-2 font-mono">user@kompas.uz</td><td className="px-4 py-2 font-mono">user12345</td></tr>
+              <tr><td className="px-4 py-2 font-semibold">HR</td><td className="px-4 py-2 font-mono">hr@kompas.uz</td><td className="px-4 py-2 font-mono">hr12345</td></tr>
+              <tr><td className="px-4 py-2 font-semibold">Admin</td><td className="px-4 py-2 font-mono">admin@kompas.uz</td><td className="px-4 py-2 font-mono">admin12345</td></tr>
             </tbody>
           </table>
         </div>
