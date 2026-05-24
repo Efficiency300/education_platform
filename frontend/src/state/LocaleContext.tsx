@@ -26,11 +26,8 @@ function detectInitial(): Locale {
     const stored = localStorage.getItem(KEY);
     if (stored && (LOCALES as readonly string[]).includes(stored)) return stored as Locale;
   } catch {}
-  const nav = (typeof navigator !== "undefined" ? navigator.language : "") || "";
-  const code = nav.toLowerCase().slice(0, 2);
-  if (code === "uz") return "uz";
-  if (code === "en") return "en";
-  return "ru";
+  // Default to Uzbek for new sessions; users can switch via the language picker.
+  return "uz";
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {

@@ -53,6 +53,22 @@ def _with_locale(system: str, locale: str | None) -> str:
     label = _LANG_LABELS.get(locale)
     if not label:
         return system
+    # Strong, repeated instruction — Gemini sometimes ignores a single sentence.
+    if locale == "uz":
+        return (
+            f"{system}\n\n"
+            "MUHIM: javobni FAQAT oʻzbek tilida (lotin yozuvi, oʻzbekcha) "
+            "yoz. Hatto savol rus yoki ingliz tilida boʻlsa ham, javob "
+            "faqat oʻzbekcha boʻlishi kerak. Rus yoki ingliz soʻzlarini "
+            "ishlatma, faqat oʻzbek tili."
+        )
+    if locale == "en":
+        return (
+            f"{system}\n\n"
+            "IMPORTANT: reply STRICTLY in English. Even if the question or "
+            "the source material is in another language, the answer must be "
+            "in English only."
+        )
     return (
         f"{system}\n\n"
         f"ВАЖНО: отвечай строго на {label} языке, "

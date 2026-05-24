@@ -1,6 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useT } from "../state/LocaleContext";
+import { toggleNors } from "./NorsAssistant";
+import NorthMascot from "./north/NorthMascot";
 
 function capitalize(s: string) {
   if (!s) return "";
@@ -87,6 +89,41 @@ export default function Topbar() {
         </h1>
       </div>
 
+      <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={toggleNors}
+        aria-label={t("nors.assistant.open")}
+        className="kp-topbar-nors"
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 99,
+          background: "var(--bg-card)",
+          border: "0.5px solid var(--border)",
+          padding: 2,
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <NorthMascot state="hyped" height={36} size="small" />
+        <span
+          style={{
+            position: "absolute",
+            top: 4,
+            right: 4,
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: "var(--brand)",
+            boxShadow: "0 0 0 2px var(--bg-card)",
+          }}
+        />
+      </button>
       <Link
         to="/profile"
         aria-label="Profile"
@@ -130,8 +167,10 @@ export default function Topbar() {
           )}
         </div>
       </Link>
+      </div>
       <style>{`
         .kp-topbar-profile:hover { border-color: var(--border-emphasis); background: var(--bg-hover); }
+        .kp-topbar-nors:hover { border-color: var(--border-brand); transform: translateY(-1px); transition: all 0.15s; }
       `}</style>
     </header>
   );

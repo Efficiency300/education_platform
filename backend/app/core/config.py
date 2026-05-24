@@ -6,8 +6,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Primary LLM: Gemini. Falls back to Anthropic when set, mock otherwise.
+    # Default model is gemini-2.5-flash-lite — cheapest/fastest tier with its
+    # own quota pool, which sidesteps the flash-tier 429. Override via the
+    # GEMINI_MODEL env var to switch to flash/pro/experimental previews.
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.5-flash-lite"
 
     anthropic_api_key: str = ""
     llm_model: str = "claude-haiku-4-5-20251001"

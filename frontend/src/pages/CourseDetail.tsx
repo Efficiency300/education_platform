@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { api, CourseDetail, QuizSubmitResponse } from "../api";
 import { useProgress } from "../state/ProgressContext";
-import { useT } from "../state/LocaleContext";
+import { useT, useLocale } from "../state/LocaleContext";
 import Markdown from "../components/Markdown";
 import { LessonAttachmentsView } from "../components/LessonAttachments";
 import { useTranslated, useTranslation } from "../state/TranslationContext";
@@ -26,6 +26,7 @@ export default function CourseDetailPage() {
  const navigate = useNavigate();
  const { user, refresh, notify } = useProgress();
  const t = useT();
+ const { locale } = useLocale();
  const [course, setCourse] = useState<CourseDetail | null>(null);
  const [activeLessonIdx, setActiveLessonIdx] = useState(0);
  const [mode, setMode] = useState<Mode>("lesson");
@@ -35,11 +36,11 @@ export default function CourseDetailPage() {
 
  const load = useCallback(async () => {
  if (!user) return;
- const c = await api.course(slug, user.id);
+ const c = await api.course(slug, user.id, locale);
  setCourse(c);
  const firstUnfinished = c.lessons.findIndex((l) => !l.completed);
  setActiveLessonIdx(firstUnfinished === -1 ? 0 : firstUnfinished);
- }, [slug, user]);
+ }, [slug, user, locale]);
 
  useEffect(() => {
  load();

@@ -27,6 +27,7 @@ from app.courses.catalog import (
     get_lesson,
     course_xp_reward,
 )
+from app.courses.translations import localize_course_dict, localize_course_summary
 from app.schemas.courses import (
     CourseSummary,
     CourseDetail,
@@ -132,8 +133,13 @@ def _course_visible_to(course: dict, user_dirs: set[str]) -> bool:
 
 
 @router.get("", response_model=list[CourseSummary])
-async def courses_index(user_id: int | None = None, db: AsyncSession = Depends(get_session)):
+async def courses_index(
+    user_id: int | None = None,
+    lang: str | None = None,
+    db: AsyncSession = Depends(get_session),
+):
     items = await list_courses(db)
+    items = [localize_course_summary(c, lang or "ru") for c in items]
     if not user_id:
         return [CourseSummary(**c) for c in items]
 
@@ -186,11 +192,13 @@ async def courses_index(user_id: int | None = None, db: AsyncSession = Depends(g
 async def course_detail(
     course_slug: str,
     user_id: int | None = None,
+    lang: str | None = None,
     db: AsyncSession = Depends(get_session),
 ):
     course = await get_course(db, course_slug)
     if not course:
         raise HTTPException(404, "Course not found")
+    course = localize_course_dict(course, lang or "ru")
 
     completed_lesson_slugs: set[str] = set()
     cp: CourseProgress | None = None

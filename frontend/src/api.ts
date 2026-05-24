@@ -498,8 +498,14 @@ export const api = {
       body: JSON.stringify({ user_id, message, locale }),
     }),
   history: (user_id: number) => request<ChatHistoryItem[]>(`/chat/history/${user_id}`),
-  scenarios: () => request<ScenarioSummary[]>("/simulator/scenarios"),
-  scenario: (id: string) => request<Scenario>(`/simulator/scenarios/${id}`),
+  scenarios: (lang?: string) =>
+    request<ScenarioSummary[]>(
+      `/simulator/scenarios${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`,
+    ),
+  scenario: (id: string, lang?: string) =>
+    request<Scenario>(
+      `/simulator/scenarios/${id}${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`,
+    ),
   startSession: (user_id: number, scenario_id: string) =>
     request<SimSession>("/simulator/sessions", {
       method: "POST",
@@ -517,14 +523,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ user_id }),
     }),
-  courses: (user_id?: number) =>
-    request<CourseSummary[]>(
-      `/courses${user_id ? `?user_id=${user_id}` : ""}`,
-    ),
-  course: (slug: string, user_id?: number) =>
-    request<CourseDetail>(
-      `/courses/${slug}${user_id ? `?user_id=${user_id}` : ""}`,
-    ),
+  courses: (user_id?: number, lang?: string) => {
+    const qs = new URLSearchParams();
+    if (user_id) qs.set("user_id", String(user_id));
+    if (lang) qs.set("lang", lang);
+    const q = qs.toString();
+    return request<CourseSummary[]>(`/courses${q ? `?${q}` : ""}`);
+  },
+  course: (slug: string, user_id?: number, lang?: string) => {
+    const qs = new URLSearchParams();
+    if (user_id) qs.set("user_id", String(user_id));
+    if (lang) qs.set("lang", lang);
+    const q = qs.toString();
+    return request<CourseDetail>(`/courses/${slug}${q ? `?${q}` : ""}`);
+  },
   completeLesson: (user_id: number, course_slug: string, lesson_slug: string) =>
     request<LessonCompleteResponse>("/courses/lessons/complete", {
       method: "POST",
@@ -1059,6 +1071,7 @@ export interface NorthScenarioStep {
   north_state: NorthState;
   on_complete_state: NorthState;
   content_ref?: string | null;
+  wrong_feedback?: string | null;
 }
 
 export interface NorthScenarioOut {
@@ -1125,6 +1138,8 @@ export interface NorthRespondPayload {
   north_state: NorthState;
   /** Set when the step North just completed had a ``content_ref``. */
   navigate?: NorthNavigate | null;
+  /** Populated on wrong answers — the panel renders it as a Nors follow-up. */
+  feedback?: string | null;
 }
 
 // ---------- North agent / assessment / navigate ----------

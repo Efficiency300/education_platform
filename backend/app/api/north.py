@@ -58,7 +58,14 @@ class ScenarioStep(BaseModel):
     correct_answer: str | None = None
     north_state: NorthState = "waiting"
     on_complete_state: NorthState = "celebrating"
+    # ``content_ref`` semantics:
+    #   "course_slug"            → navigates to /courses/<slug>
+    #   "sim:<scenario_id>"      → navigates to /simulator/<scenario_id>
+    #   "route:/some/path"       → navigates to <path> verbatim
     content_ref: str | None = None
+    # Shown to the user when their answer is wrong — keeps the mascot helpful
+    # instead of just shaking its head.
+    wrong_feedback: str | None = None
 
 
 class ScenarioOut(BaseModel):
@@ -139,6 +146,9 @@ class NorthRespondOut(BaseModel):
     total_steps: int
     north_state: NorthState
     navigate: NorthNavigate | None = None
+    # Populated on wrong answers (pulled from the step's ``wrong_feedback``);
+    # the panel renders this as a follow-up bubble so the user understands why.
+    feedback: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -375,6 +385,7 @@ async def respond(
                 current_step=progress.current_step,
                 total_steps=total,
                 north_state="surprised",
+                feedback=current.wrong_feedback,
             )
 
     progress.current_step += 1
@@ -394,17 +405,33 @@ async def respond(
 
     next_step = steps[progress.current_step] if progress.current_step < total else None
 
-    # If the step the user just finished pointed at a specific course, ride
-    # that through to the client as a navigate hint. North's frontend hook
-    # consumes ``navigate`` and routes the user there with a tiny delay so the
-    # celebrate animation gets to play first.
+    # If the step the user just finished pointed at a specific course or
+    # simulator, ride that through to the client as a navigate hint. The
+    # frontend handler consumes ``navigate`` and routes the user there with a
+    # tiny delay so the celebrate animation plays first.
     navigate: NorthNavigate | None = None
     if current.content_ref:
-        navigate = NorthNavigate(
-            type="course",
-            target=current.content_ref,
-            label=current.content_ref,
-        )
+        ref = current.content_ref.strip()
+        if ref.startswith("sim:"):
+            sim_id = ref.split(":", 1)[1].strip()
+            navigate = NorthNavigate(
+                type="url",
+                target=f"/simulator/{sim_id}",
+                label=sim_id,
+            )
+        elif ref.startswith("route:"):
+            path = ref.split(":", 1)[1].strip()
+            navigate = NorthNavigate(
+                type="url",
+                target=path,
+                label=path,
+            )
+        else:
+            navigate = NorthNavigate(
+                type="course",
+                target=ref,
+                label=ref,
+            )
 
     return NorthRespondOut(
         is_correct=is_correct,

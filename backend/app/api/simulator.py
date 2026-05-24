@@ -19,21 +19,38 @@ from app.simulator.scenarios import (
     find_step,
     next_step_id,
 )
+from app.simulator.translations import localize_scenario, SCENARIO_TRANSLATIONS
 
 router = APIRouter(prefix="/simulator", tags=["simulator"])
 
 
+def _localize_summary(item: dict, lang: str) -> dict:
+    """Apply lang-specific title/description overrides to a list-mode summary."""
+    if lang in (None, "", "ru"):
+        return item
+    tr = SCENARIO_TRANSLATIONS.get(item.get("id", ""), {}).get(lang)
+    if not tr:
+        return item
+    out = dict(item)
+    if "title" in tr:
+        out["title"] = tr["title"]
+    if "description" in tr:
+        out["description"] = tr["description"]
+    return out
+
+
 @router.get("/scenarios")
-async def scenarios_list():
-    return list_scenarios()
+async def scenarios_list(lang: str | None = None):
+    items = list_scenarios()
+    return [_localize_summary(s, lang or "ru") for s in items]
 
 
 @router.get("/scenarios/{scenario_id}", response_model=ScenarioOut)
-async def scenario_detail(scenario_id: str):
+async def scenario_detail(scenario_id: str, lang: str | None = None):
     s = get_scenario(scenario_id)
     if not s:
         raise HTTPException(404, "Scenario not found")
-    return s
+    return localize_scenario(s, lang or "ru")
 
 
 @router.post("/sessions", response_model=SessionOut)

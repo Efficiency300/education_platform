@@ -303,6 +303,257 @@ async def _seed_default_scenario() -> None:
         await session.commit()
 
 
+# ---------------------------------------------------------------------------
+# Backend-developer onboarding scenario
+# ---------------------------------------------------------------------------
+
+BACKEND_ONBOARDING_SCENARIO = {
+    "scenario_uid": "nors-backend-onboarding-v1",
+    "name": "Backend Onboarding with Nors",
+    "department": "",
+    "directions": [],  # visible to everyone; the picker prefers most-recent update
+    "status": "published",
+    "steps": [
+        {
+            "id": "welcome",
+            "order": 0,
+            "north_message": (
+                "Salom, {name}! Men Nors 🧭 — sizning shaxsiy yo‘l ko‘rsatuvchingiz. "
+                "Bugun sizni backend yo‘nalishi bo‘yicha to‘liq onboardingdan o‘tkazaman: "
+                "Python kursi → tushunish savollari → simulyatorda amaliyot. "
+                "Boshlashga tayyormisiz?"
+            ),
+            "input_type": "choice",
+            "choices": ["Tayyorman, ketdik!", "Bir oz keyinroq"],
+            "correct_answer": "Tayyorman, ketdik!",
+            "wrong_feedback": (
+                "Tushundim. Tayyor bo‘lganingizda menga ayting — qachon bo‘lsa ham men shu yerdaman. "
+                "Boshlash uchun \"Tayyorman, ketdik!\" tugmasini bosing."
+            ),
+            "north_state": "hyped",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "ask_open_course",
+            "order": 1,
+            "north_message": (
+                "Ajoyib! Birinchi qadam — Python Backend kursi (A dan Z gacha, 12 ta dars). "
+                "U yerda asoslar, FastAPI, SQL, Docker va prodga chiqarish bor. "
+                "Hozir kursni ochaylikmi?"
+            ),
+            "input_type": "choice",
+            "choices": ["Ha, ochaylik", "Yo‘q, oldin tushuntiring"],
+            "correct_answer": "Ha, ochaylik",
+            "wrong_feedback": (
+                "Yaxshi savol. Bu kurs sizni 0 dan to ishlaydigan FastAPI servisigacha olib boradi: "
+                "async/await, Pydantic, SQLAlchemy, JWT auth, testlash va Docker. "
+                "Tayyor bo‘lganda \"Ha, ochaylik\" tugmasini bosing — birga o‘tamiz."
+            ),
+            "north_state": "waiting",
+            "on_complete_state": "celebrating",
+            # Triggers /courses/python_backend_az; mascot panel travels with the user.
+            "content_ref": "python_backend_az",
+        },
+        {
+            "id": "after_course",
+            "order": 2,
+            "north_message": (
+                "Mana, kurs ochildi! Darslarni o‘qib chiqing, men shu yerda kutaman. "
+                "Tugatganingizda \"Davom etish\" tugmasini bosing — bir nechta tushunish "
+                "savolini birga ko‘rib chiqamiz."
+            ),
+            "input_type": "none",
+            "choices": [],
+            "correct_answer": None,
+            "north_state": "thinking",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "q_async",
+            "order": 3,
+            "north_message": (
+                "Birinchi savol. Async-funksiya ichida `time.sleep(2)` chaqirsangiz nima bo‘ladi?"
+            ),
+            "input_type": "choice",
+            "choices": [
+                "Hech narsa, korutina kutadi",
+                "Butun event loop 2 soniya bloklanadi",
+                "Python avtomatik asyncio.sleep ga o‘zgartiradi",
+            ],
+            "correct_answer": "Butun event loop 2 soniya bloklanadi",
+            "wrong_feedback": (
+                "To‘g‘ri javob: butun event loop bloklanadi. Async kod ichida bloklovchi "
+                "sleep BARCHA boshqa so‘rovlarni to‘xtatadi — 1 ta foydalanuvchi serverning "
+                "javob berishini hammasidan o‘g‘irlaydi. Doim `await asyncio.sleep(...)` "
+                "yoki `httpx.AsyncClient` ishlating."
+            ),
+            "north_state": "waiting",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "q_pydantic",
+            "order": 4,
+            "north_message": "FastAPI da Pydantic modeli nima uchun kerak?",
+            "input_type": "choice",
+            "choices": [
+                "Faqat tipizatsiya uchun",
+                "Kirishni validatsiya qilish + chiqishni serializatsiya qilish",
+                "ORM modeli sifatida",
+            ],
+            "correct_answer": "Kirishni validatsiya qilish + chiqishni serializatsiya qilish",
+            "wrong_feedback": (
+                "Aslida: Pydantic kirishni avtomatik validatsiya qiladi (noto‘g‘ri JSON → 422) "
+                "va chiqishni serializatsiya qiladi. ORM emas — bu SQLAlchemy ish. "
+                "Pydantic = chegaradagi shartnoma (boundary contract)."
+            ),
+            "north_state": "waiting",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "q_jwt",
+            "order": 5,
+            "north_message": "JWT uchun `SECRET` qayerda saqlanishi kerak?",
+            "input_type": "choice",
+            "choices": [
+                "Kodda, # TODO bilan",
+                "Atrof-muhit o‘zgaruvchilarida (env) yoki sir-ombor (vault)",
+                ".gitignore ostida Git da",
+            ],
+            "correct_answer": "Atrof-muhit o‘zgaruvchilarida (env) yoki sir-ombor (vault)",
+            "wrong_feedback": (
+                "Sirlar HECH QACHON kod yoki Git da bo‘lmasligi kerak — hatto .gitignore "
+                "ostida ham (xato bilan commit qilish oson). To‘g‘ri yo‘l: env-fayl + secret "
+                "manager (HashiCorp Vault, AWS Secrets Manager, Doppler va h.k.). "
+                "Sirning kompromisi = darhol rotatsiya."
+            ),
+            "north_state": "waiting",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "q_alembic",
+            "order": 6,
+            "north_message": "SQLAlchemy loyihasida Alembic nima vazifani bajaradi?",
+            "input_type": "choice",
+            "choices": [
+                "ORM alternativasi",
+                "Schema migratsiyalarini versiyalash",
+                "Redis ulanishi",
+            ],
+            "correct_answer": "Schema migratsiyalarini versiyalash",
+            "wrong_feedback": (
+                "Alembic — bu migratsiya tizimi: modelni o‘zgartirgan har safar yangi revision "
+                "yarating (`alembic revision --autogenerate -m \"...\"`) va `alembic upgrade head` "
+                "bilan qo‘llang. Migratsiyalarsiz prod schema versiyalanmaydi — orqaga qaytishning iloji yo‘q."
+            ),
+            "north_state": "waiting",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "quiz_done",
+            "order": 7,
+            "north_message": (
+                "Zo‘r! Nazariyani tushundingiz. Endi eng qiziq qism — amaliyot. "
+                "Sizni simulyatorga olib o‘tay: u yerda real ish stsenariylarini xavfsiz "
+                "muhitda mashq qilasiz, hech qanday real ma'lumotsiz."
+            ),
+            "input_type": "none",
+            "choices": [],
+            "correct_answer": None,
+            "north_state": "celebrating",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "ask_simulator",
+            "order": 8,
+            "north_message": "Simulyatorga o‘tamizmi? Birinchi stsenariy — mijozga xizmat ko‘rsatish.",
+            "input_type": "choice",
+            "choices": ["Ha, ketdik simulyatorga", "Hozir emas, savolim bor"],
+            "correct_answer": "Ha, ketdik simulyatorga",
+            "wrong_feedback": (
+                "Yaxshi, savolingizni quyidagi chat oynasiga yozing — istalgan vaqtda javob beraman. "
+                "Tayyor bo‘lganingizda \"Ha, ketdik simulyatorga\" tugmasini bosing."
+            ),
+            "north_state": "waiting",
+            "on_complete_state": "celebrating",
+            # sim:<scenario_id> → /simulator/abs_customer_service
+            "content_ref": "sim:abs_customer_service",
+        },
+        {
+            "id": "in_simulator",
+            "order": 9,
+            "north_message": (
+                "Mana simulyator! Bu mijozga xizmat ko‘rsatish stsenariysi — virtual mijoz "
+                "keldi, sizning vazifangiz uni to‘g‘ri identifikatsiya qilish va hisob ochish. "
+                "Har qadamda men panelda turaman. Boshlang — har bir variantni tanlab ko‘ring. "
+                "Tugatganingizda \"Davom etish\" tugmasini bosing."
+            ),
+            "input_type": "none",
+            "choices": [],
+            "correct_answer": None,
+            "north_state": "watching",
+            "on_complete_state": "celebrating",
+            "content_ref": None,
+        },
+        {
+            "id": "wrap_up",
+            "order": 10,
+            "north_message": (
+                "Tabriklayman, {name}! 🎉 Siz backend onboardingni yakunladingiz: "
+                "kursni tugatdingiz, nazariyani tekshirdingiz va amaliyotda sinab ko‘rdingiz. "
+                "Endi qachon savol tug‘ilsa — yuqori o‘ng burchakdagi tugmam orqali meni "
+                "har qanday sahifada chaqirishingiz mumkin. Omad!"
+            ),
+            "input_type": "none",
+            "choices": [],
+            "correct_answer": None,
+            "north_state": "celebrating",
+            "on_complete_state": "celebrating",
+            "content_ref": "route:/progress",
+        },
+    ],
+}
+
+
+async def _seed_backend_scenario() -> None:
+    """Idempotently upsert the backend-developer onboarding scenario.
+
+    Keyed by ``scenario_uid`` so each restart picks up step revisions. We do
+    overwrite the steps here so design tweaks ship automatically in dev — admins
+    who want a different scenario should unpublish this one or create their own.
+    """
+    async with SessionLocal() as session:
+        existing = await session.scalar(
+            select(Scenario).where(
+                Scenario.scenario_uid == BACKEND_ONBOARDING_SCENARIO["scenario_uid"]
+            )
+        )
+        if existing is None:
+            session.add(
+                Scenario(
+                    scenario_uid=BACKEND_ONBOARDING_SCENARIO["scenario_uid"],
+                    name=BACKEND_ONBOARDING_SCENARIO["name"],
+                    department=BACKEND_ONBOARDING_SCENARIO["department"],
+                    directions=BACKEND_ONBOARDING_SCENARIO["directions"],
+                    status=BACKEND_ONBOARDING_SCENARIO["status"],
+                    steps=BACKEND_ONBOARDING_SCENARIO["steps"],
+                )
+            )
+        else:
+            existing.name = BACKEND_ONBOARDING_SCENARIO["name"]
+            existing.department = BACKEND_ONBOARDING_SCENARIO["department"]
+            existing.directions = BACKEND_ONBOARDING_SCENARIO["directions"]
+            existing.status = BACKEND_ONBOARDING_SCENARIO["status"]
+            existing.steps = BACKEND_ONBOARDING_SCENARIO["steps"]
+        await session.commit()
+
+
 async def _seed_default_flow() -> None:
     """Insert the default Норс flow on first boot.
 
@@ -331,6 +582,7 @@ async def lifespan(app: FastAPI):
     await _seed_demo_users()
     await _seed_default_flow()
     await _seed_default_scenario()
+    await _seed_backend_scenario()
     # Vector knowledge base — silent no-op when QDRANT_URL isn't set.
     await vector_store.init()
     # Make sure the uploads directory exists so the StaticFiles mount works

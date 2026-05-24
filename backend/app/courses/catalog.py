@@ -379,12 +379,444 @@ COURSES: dict[str, dict] = {
 }
 
 
+COURSES["python_backend_az"] = {
+    "slug": "python_backend_az",
+    "title": "Python Backend · от А до Я",
+    "subtitle": "Полный курс по бэкенду на Python (FastAPI, SQL, Docker, тесты)",
+    "description": (
+        "Полный курс для будущих backend-разработчиков. Идём от синтаксиса Python "
+        "и виртуальных окружений до FastAPI, SQLAlchemy, Docker, тестирования "
+        "и подготовки сервиса к продакшену. После курса вы готовы вести "
+        "реальные сервисы и проходить технические собеседования."
+    ),
+    "icon": "book",
+    "difficulty": "medium",
+    "estimated_minutes": 240,
+    "target_scenario_id": "abs_customer_service",
+    "tags": ["python", "backend", "fastapi", "sql", "docker", "onboarding"],
+    # Empty directions = visible to everyone; the mascot routes users straight
+    # to this course on demand regardless of their team.
+    "directions": [],
+    "lessons": [
+        {
+            "slug": "intro_environment",
+            "title": "1. Введение и окружение разработчика",
+            "summary": "Установка Python 3.11+, виртуальные окружения и pip.",
+            "duration_min": 12,
+            "body_md": (
+                "## Что такое backend\n\n"
+                "Backend — это серверная часть приложения: бизнес-логика, работа с БД, "
+                "API для фронта и мобильных клиентов. На Python обычно пишут на "
+                "**FastAPI**, **Django** или **Flask**.\n\n"
+                "### Установка\n"
+                "1. Установите Python ≥ 3.11 с [python.org](https://www.python.org).\n"
+                "2. Проверьте: `python --version`.\n"
+                "3. Установите редактор — VS Code или PyCharm.\n\n"
+                "### Виртуальное окружение\n"
+                "```bash\n"
+                "python -m venv .venv\n"
+                "source .venv/bin/activate   # Linux/Mac\n"
+                ".venv\\Scripts\\activate    # Windows\n"
+                "pip install --upgrade pip\n"
+                "```\n\n"
+                "> Венв изолирует зависимости проекта. Никогда не ставьте пакеты в "
+                "системный Python — это путь к конфликтам версий."
+            ),
+        },
+        {
+            "slug": "python_basics",
+            "title": "2. Основы Python: типы, функции, исключения",
+            "summary": "Синтаксис, типы данных, функции, обработка исключений.",
+            "duration_min": 18,
+            "body_md": (
+                "## Базовые типы\n\n"
+                "```python\n"
+                "name: str = \"Alice\"\n"
+                "age: int = 30\n"
+                "score: float = 4.7\n"
+                "is_admin: bool = False\n"
+                "tags: list[str] = [\"py\", \"backend\"]\n"
+                "user: dict[str, int] = {\"id\": 1}\n"
+                "```\n\n"
+                "### Функции и типизация\n"
+                "```python\n"
+                "def add(a: int, b: int) -> int:\n"
+                "    return a + b\n"
+                "```\n\n"
+                "### Исключения\n"
+                "```python\n"
+                "try:\n"
+                "    value = int(payload)\n"
+                "except ValueError as e:\n"
+                "    log.warning(\"bad payload: %s\", e)\n"
+                "    raise\n"
+                "```\n\n"
+                "### Списковые включения\n"
+                "```python\n"
+                "evens = [x for x in range(10) if x % 2 == 0]\n"
+                "```\n\n"
+                "Это основа — без неё не понять примеры дальше."
+            ),
+        },
+        {
+            "slug": "oop_modules",
+            "title": "3. ООП, модули и структура проекта",
+            "summary": "Классы, dataclass, импорты, package layout.",
+            "duration_min": 15,
+            "body_md": (
+                "## Классы\n\n"
+                "```python\n"
+                "from dataclasses import dataclass\n\n"
+                "@dataclass\n"
+                "class User:\n"
+                "    id: int\n"
+                "    email: str\n"
+                "    is_active: bool = True\n"
+                "```\n\n"
+                "### Структура проекта\n"
+                "```\n"
+                "myapp/\n"
+                "├── app/\n"
+                "│   ├── __init__.py\n"
+                "│   ├── main.py        # точка входа\n"
+                "│   ├── api/           # роуты\n"
+                "│   ├── db/            # модели и сессия\n"
+                "│   └── core/          # конфиг, утилиты\n"
+                "├── tests/\n"
+                "├── pyproject.toml\n"
+                "└── requirements.txt\n"
+                "```\n\n"
+                "Разделяйте API, доменную логику и работу с БД в разные модули — "
+                "тестировать и переиспользовать проще."
+            ),
+        },
+        {
+            "slug": "async_io",
+            "title": "4. Асинхронность: async/await, asyncio",
+            "summary": "Почему async — основа современного Python-бэкенда.",
+            "duration_min": 20,
+            "body_md": (
+                "## async/await\n\n"
+                "Современные веб-фреймворки (FastAPI, Starlette) асинхронные — "
+                "один процесс держит тысячи соединений вместо одного потока на запрос.\n\n"
+                "```python\n"
+                "import asyncio\n\n"
+                "async def fetch_user(uid: int) -> dict:\n"
+                "    await asyncio.sleep(0.1)   # имитация I/O\n"
+                "    return {\"id\": uid, \"name\": \"Alice\"}\n\n"
+                "async def main():\n"
+                "    users = await asyncio.gather(\n"
+                "        fetch_user(1), fetch_user(2), fetch_user(3),\n"
+                "    )\n"
+                "    print(users)\n\n"
+                "asyncio.run(main())\n"
+                "```\n\n"
+                "### Правило\n"
+                "Внутри async-функции **никогда** не вызывайте блокирующий код "
+                "(time.sleep, requests.get, тяжёлые расчёты). Используйте "
+                "`await asyncio.sleep`, `httpx.AsyncClient`, `run_in_executor`."
+            ),
+        },
+        {
+            "slug": "fastapi_basics",
+            "title": "5. FastAPI: первое HTTP-приложение",
+            "summary": "Роуты, валидация Pydantic, автодокументация.",
+            "duration_min": 22,
+            "body_md": (
+                "## Установка\n\n"
+                "```bash\n"
+                "pip install fastapi uvicorn[standard]\n"
+                "```\n\n"
+                "### Минимальное приложение\n"
+                "```python\n"
+                "from fastapi import FastAPI\n"
+                "from pydantic import BaseModel\n\n"
+                "app = FastAPI()\n\n"
+                "class UserIn(BaseModel):\n"
+                "    email: str\n"
+                "    full_name: str\n\n"
+                "@app.post(\"/users\")\n"
+                "async def create_user(payload: UserIn):\n"
+                "    return {\"ok\": True, \"email\": payload.email}\n"
+                "```\n\n"
+                "Запуск: `uvicorn app.main:app --reload`.\n"
+                "Swagger UI: http://localhost:8000/docs.\n\n"
+                "### Pydantic\n"
+                "Любая модель Pydantic = валидация на входе + сериализация на выходе. "
+                "Если клиент отправит `email: 42` — FastAPI вернёт `422` автоматически."
+            ),
+        },
+        {
+            "slug": "routing_deps",
+            "title": "6. Роутинг и Dependency Injection",
+            "summary": "APIRouter, depends, аутентификация по токену.",
+            "duration_min": 18,
+            "body_md": (
+                "## Разделение на роутеры\n\n"
+                "```python\n"
+                "from fastapi import APIRouter, Depends, HTTPException\n\n"
+                "router = APIRouter(prefix=\"/users\", tags=[\"users\"])\n\n"
+                "async def get_current_user(token: str) -> dict:\n"
+                "    if token != \"secret\":\n"
+                "        raise HTTPException(401, \"unauthorized\")\n"
+                "    return {\"id\": 1}\n\n"
+                "@router.get(\"/me\")\n"
+                "async def me(user = Depends(get_current_user)):\n"
+                "    return user\n"
+                "```\n\n"
+                "`Depends` — главная идея FastAPI: любая зависимость "
+                "(подключение к БД, текущий пользователь, лимит запросов) "
+                "выражается через функцию + `Depends(...)`."
+            ),
+        },
+        {
+            "slug": "sql_sqlalchemy",
+            "title": "7. Базы данных: SQL и SQLAlchemy 2.x",
+            "summary": "ORM, sessionmaker, async-сессии, миграции.",
+            "duration_min": 25,
+            "body_md": (
+                "## Установка\n\n"
+                "```bash\n"
+                "pip install sqlalchemy[asyncio] asyncpg alembic\n"
+                "```\n\n"
+                "### Модель\n"
+                "```python\n"
+                "from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n"
+                "class Base(DeclarativeBase):\n"
+                "    pass\n\n"
+                "class User(Base):\n"
+                "    __tablename__ = \"users\"\n"
+                "    id: Mapped[int] = mapped_column(primary_key=True)\n"
+                "    email: Mapped[str] = mapped_column(unique=True, index=True)\n"
+                "```\n\n"
+                "### Сессия + асинхронные запросы\n"
+                "```python\n"
+                "from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine\n"
+                "from sqlalchemy import select\n\n"
+                "engine = create_async_engine(\"postgresql+asyncpg://user:pw@localhost/db\")\n"
+                "Session = async_sessionmaker(engine, expire_on_commit=False)\n\n"
+                "async def find_user(email: str) -> User | None:\n"
+                "    async with Session() as s:\n"
+                "        return await s.scalar(select(User).where(User.email == email))\n"
+                "```\n\n"
+                "### Миграции\n"
+                "`alembic init alembic` → `alembic revision --autogenerate` → `alembic upgrade head`."
+            ),
+        },
+        {
+            "slug": "auth_security",
+            "title": "8. Авторизация: JWT, OAuth2, хеш пароля",
+            "summary": "Безопасное хранение паролей и токены.",
+            "duration_min": 20,
+            "body_md": (
+                "## Пароли — bcrypt/argon2\n\n"
+                "```bash\n"
+                "pip install passlib[bcrypt] python-jose[cryptography]\n"
+                "```\n\n"
+                "```python\n"
+                "from passlib.context import CryptContext\n\n"
+                "pwd = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n"
+                "hashed = pwd.hash(\"secret123\")\n"
+                "assert pwd.verify(\"secret123\", hashed)\n"
+                "```\n\n"
+                "### JWT-токен\n"
+                "```python\n"
+                "from jose import jwt\n"
+                "from datetime import datetime, timedelta\n\n"
+                "SECRET = \"change-me\"  # храните в env\n\n"
+                "def issue(user_id: int) -> str:\n"
+                "    return jwt.encode(\n"
+                "        {\"sub\": str(user_id), \"exp\": datetime.utcnow() + timedelta(hours=24)},\n"
+                "        SECRET, algorithm=\"HS256\",\n"
+                "    )\n"
+                "```\n\n"
+                "**Никогда** не храните пароли в открытом виде, не коммитьте секреты в Git, "
+                "и используйте HTTPS на проде."
+            ),
+        },
+        {
+            "slug": "errors_logging",
+            "title": "9. Логирование, ошибки и middleware",
+            "summary": "structlog/logging, обработчики исключений, request id.",
+            "duration_min": 14,
+            "body_md": (
+                "## Логирование\n\n"
+                "```python\n"
+                "import logging\n"
+                "logging.basicConfig(level=logging.INFO, format=\"%(levelname)s %(name)s %(message)s\")\n"
+                "log = logging.getLogger(\"app\")\n"
+                "log.info(\"user %s registered\", user.id)\n"
+                "```\n\n"
+                "### Глобальный обработчик ошибок\n"
+                "```python\n"
+                "from fastapi import Request\n"
+                "from fastapi.responses import JSONResponse\n\n"
+                "@app.exception_handler(ValueError)\n"
+                "async def handle_value_error(_: Request, exc: ValueError):\n"
+                "    return JSONResponse(status_code=400, content={\"detail\": str(exc)})\n"
+                "```\n\n"
+                "### Middleware: request id\n"
+                "Добавляйте уникальный `X-Request-ID` каждому запросу — без него "
+                "невозможно искать инциденты в логах."
+            ),
+        },
+        {
+            "slug": "testing",
+            "title": "10. Тестирование: pytest + httpx + фикстуры",
+            "summary": "Юнит-тесты, интеграционные тесты, тестовые БД.",
+            "duration_min": 22,
+            "body_md": (
+                "## pytest\n\n"
+                "```bash\n"
+                "pip install pytest pytest-asyncio httpx\n"
+                "```\n\n"
+                "```python\n"
+                "# tests/test_users.py\n"
+                "import pytest\n"
+                "from httpx import AsyncClient, ASGITransport\n"
+                "from app.main import app\n\n"
+                "@pytest.mark.asyncio\n"
+                "async def test_create_user():\n"
+                "    async with AsyncClient(transport=ASGITransport(app=app), base_url=\"http://t\") as c:\n"
+                "        r = await c.post(\"/users\", json={\"email\": \"a@b.c\", \"full_name\": \"A\"})\n"
+                "        assert r.status_code == 200\n"
+                "        assert r.json()[\"email\"] == \"a@b.c\"\n"
+                "```\n\n"
+                "Запуск: `pytest -q`. Покрытие: `pytest --cov=app`.\n\n"
+                "Тесты — не дополнительная работа, а способ менять код, "
+                "не ломая прод."
+            ),
+        },
+        {
+            "slug": "docker_deploy",
+            "title": "11. Docker и деплой",
+            "summary": "Dockerfile, docker-compose, переменные окружения.",
+            "duration_min": 18,
+            "body_md": (
+                "## Dockerfile\n\n"
+                "```dockerfile\n"
+                "FROM python:3.12-slim\n"
+                "WORKDIR /app\n"
+                "COPY requirements.txt .\n"
+                "RUN pip install --no-cache-dir -r requirements.txt\n"
+                "COPY . .\n"
+                "EXPOSE 8000\n"
+                "CMD [\"uvicorn\", \"app.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]\n"
+                "```\n\n"
+                "### docker-compose\n"
+                "```yaml\n"
+                "services:\n"
+                "  api:\n"
+                "    build: .\n"
+                "    ports: [\"8000:8000\"]\n"
+                "    environment:\n"
+                "      DB_URL: postgresql+asyncpg://app:pw@db/app\n"
+                "    depends_on: [db]\n"
+                "  db:\n"
+                "    image: postgres:16\n"
+                "    environment:\n"
+                "      POSTGRES_USER: app\n"
+                "      POSTGRES_PASSWORD: pw\n"
+                "      POSTGRES_DB: app\n"
+                "```\n\n"
+                "Прод: запускайте за reverse-proxy (nginx/traefik) с HTTPS."
+            ),
+        },
+        {
+            "slug": "production_ready",
+            "title": "12. Готовность к продакшену",
+            "summary": "Healthcheck, метрики, миграции, секреты, мониторинг.",
+            "duration_min": 16,
+            "body_md": (
+                "## Чек-лист прода\n\n"
+                "- [ ] Endpoint `/health` для liveness и `/ready` для readiness.\n"
+                "- [ ] Секреты — только через env / vault, **никогда** в Git.\n"
+                "- [ ] Миграции запускаются автоматически перед стартом API.\n"
+                "- [ ] Структурированные логи (JSON) + request id.\n"
+                "- [ ] Метрики через Prometheus (`prometheus_fastapi_instrumentator`).\n"
+                "- [ ] Алёрты на 5xx и медленные запросы.\n"
+                "- [ ] Бэкапы БД и план восстановления.\n"
+                "- [ ] CI/CD: тесты, линтер (ruff), форматтер (black), сборка образа.\n\n"
+                "Поздравляем — вы прошли путь от Hello World до продакшен-сервиса!"
+            ),
+        },
+    ],
+    "quiz": [
+        {
+            "id": "q1",
+            "question": "Что такое виртуальное окружение Python?",
+            "options": [
+                {"id": "a", "text": "Облачный сервис от Python.org", "correct": False},
+                {"id": "b", "text": "Изолированная папка с pip и зависимостями проекта", "correct": True},
+                {"id": "c", "text": "Docker-контейнер", "correct": False},
+            ],
+            "explanation": "venv изолирует зависимости одного проекта от системного Python.",
+        },
+        {
+            "id": "q2",
+            "question": "Какой фреймворк поддерживает async/await и автогенерирует Swagger?",
+            "options": [
+                {"id": "a", "text": "Flask", "correct": False},
+                {"id": "b", "text": "FastAPI", "correct": True},
+                {"id": "c", "text": "Tornado", "correct": False},
+            ],
+            "explanation": "FastAPI — async-фреймворк с автодокументацией через OpenAPI.",
+        },
+        {
+            "id": "q3",
+            "question": "В async-функции вы случайно вызвали time.sleep(2). Что произойдёт?",
+            "options": [
+                {"id": "a", "text": "Ничего страшного — корутина просто подождёт", "correct": False},
+                {"id": "b", "text": "Заблокируется весь event loop, другие запросы встанут на 2 секунды", "correct": True},
+                {"id": "c", "text": "Python автоматически переведёт вызов в asyncio.sleep", "correct": False},
+            ],
+            "explanation": "Внутри async кода блокирующий sleep останавливает весь loop. Используйте await asyncio.sleep.",
+        },
+        {
+            "id": "q4",
+            "question": "Где хранить SECRET для JWT?",
+            "options": [
+                {"id": "a", "text": "В коде с пометкой # TODO заменить", "correct": False},
+                {"id": "b", "text": "В переменных окружения / секрет-хранилище", "correct": True},
+                {"id": "c", "text": "В Git под .gitignore", "correct": False},
+            ],
+            "explanation": "Секреты — только через env/vault. Никогда в коде или Git.",
+        },
+        {
+            "id": "q5",
+            "question": "Зачем нужен Alembic в проекте на SQLAlchemy?",
+            "options": [
+                {"id": "a", "text": "Это ORM-альтернатива", "correct": False},
+                {"id": "b", "text": "Для версионирования схемы БД через миграции", "correct": True},
+                {"id": "c", "text": "Для подключения к Redis", "correct": False},
+            ],
+            "explanation": "Alembic управляет миграциями: каждая правка модели даёт ревизию.",
+        },
+        {
+            "id": "q6",
+            "question": "Что должен возвращать /health в продакшене?",
+            "options": [
+                {"id": "a", "text": "Полную JSON-выгрузку всех таблиц БД", "correct": False},
+                {"id": "b", "text": "Лёгкий ответ 200 OK для проверки, что сервис жив", "correct": True},
+                {"id": "c", "text": "Логи за последние сутки", "correct": False},
+            ],
+            "explanation": "/health — это liveness-проба для оркестратора, она должна быть быстрой и без побочных эффектов.",
+        },
+    ],
+}
+
+
 def list_courses() -> list[dict]:
-    # Every built-in course currently targets the Call Center department.
-    # Admins can override this per-course in the future by promoting it to a
-    # custom course; for now we hard-bind built-ins so the department filter
-    # actually shows them to the right team.
+    # Built-in courses default to the Call Center department, but a course can
+    # set ``directions`` explicitly (including an empty list) to opt out — an
+    # empty list means "visible to everyone" per ``_course_visible_to``.
     DEFAULT_BUILTIN_DIRECTIONS = ["Call Center"]
+
+    def _resolve_directions(c: dict) -> list[str]:
+        if "directions" in c:
+            return list(c["directions"])
+        return list(DEFAULT_BUILTIN_DIRECTIONS)
+
     return [
         {
             "slug": c["slug"],
@@ -396,7 +828,7 @@ def list_courses() -> list[dict]:
             "estimated_minutes": c["estimated_minutes"],
             "target_scenario_id": c["target_scenario_id"],
             "tags": c["tags"],
-            "directions": c.get("directions") or DEFAULT_BUILTIN_DIRECTIONS,
+            "directions": _resolve_directions(c),
             "lessons_count": len(c["lessons"]),
             "quiz_count": len(c["quiz"]),
         }

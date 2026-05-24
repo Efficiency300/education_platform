@@ -19,6 +19,7 @@ import {
   User,
 } from "../api";
 import { useAuth } from "./AuthContext";
+import { useLocale } from "./LocaleContext";
 
 interface Toast {
   id: number;
@@ -51,6 +52,7 @@ export function useProgress(): Ctx {
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { locale } = useLocale();
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [gamification, setGamification] = useState<Gamification | null>(null);
@@ -79,7 +81,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     const [p, g, c, a] = await Promise.all([
       api.progress(user.id).catch(() => null),
       api.badges(user.id).catch(() => null),
-      api.courses(user.id).catch(() => []),
+      api.courses(user.id, locale).catch(() => []),
       api.activity(user.id, 30).catch(() => []),
     ]);
     if (p) setProgress(p);
@@ -102,19 +104,26 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
     setCourses(c);
     setActivity(a);
-  }, [user, notify]);
+  }, [user, notify, locale]);
 
-  // bootstrap health + scenarios once (для всех ролей)
+  // bootstrap health + scenarios (refetch on locale change so the picker flips
+  // languages without needing a page reload).
   useEffect(() => {
     (async () => {
       const [h, scns] = await Promise.all([
         api.health().catch(() => null),
-        api.scenarios().catch(() => []),
+        api.scenarios(locale).catch(() => []),
       ]);
       setHealth(h);
       setScenarios(scns);
     })();
-  }, []);
+  }, [locale]);
+
+  // Refresh courses too when locale flips.
+  useEffect(() => {
+    if (!user || user.role !== "user") return;
+    api.courses(user.id, locale).then(setCourses).catch(() => {});
+  }, [locale, user]);
 
   // подтянуть прогресс при логине обычного пользователя
   useEffect(() => {

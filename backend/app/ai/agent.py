@@ -411,9 +411,22 @@ _LANG_LABEL = {
 
 
 def _system_with_locale(system: str, locale: str | None) -> str:
-    label = _LANG_LABEL.get((locale or "").lower())
+    lc = (locale or "").lower()
+    label = _LANG_LABEL.get(lc)
     if not label:
         return system
+    if lc == "uz":
+        return (
+            f"{system}\n\nMUHIM: javobni FAQAT oʻzbek tilida (lotin yozuvi) yoz. "
+            "Hatto savol rus yoki ingliz tilida boʻlsa ham, javob faqat "
+            "oʻzbekcha boʻlishi kerak. Rus yoki ingliz soʻzlarini ishlatma."
+        )
+    if lc == "en":
+        return (
+            f"{system}\n\nIMPORTANT: reply STRICTLY in English. Even if the "
+            "question or sources are in another language, the answer must be "
+            "in English only."
+        )
     return (
         f"{system}\n\nВАЖНО: отвечай строго на {label} языке, "
         "даже если вопрос или фрагменты базы знаний на другом языке."

@@ -26,7 +26,8 @@ import {
  AnswerResponse,
 } from "../api";
 import { useProgress } from "../state/ProgressContext";
-import { useT } from "../state/LocaleContext";
+import { useT, useLocale } from "../state/LocaleContext";
+import { useTranslated, useTranslation } from "../state/TranslationContext";
 
 const ICON_MAP: Record<string, any> = {
  wallet: Wallet,
@@ -40,6 +41,8 @@ export default function Simulator() {
  const { scenarioId } = useParams();
  const navigate = useNavigate();
  const t = useT();
+ const { locale } = useLocale();
+ const { ensureMany, translated } = useTranslation();
  const DIFF_LABEL: Record<string, { label: string; cls: string }> = {
  easy: { label: t("diff.easy"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
  medium: { label: t("diff.medium"), cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
@@ -51,12 +54,38 @@ export default function Simulator() {
  const [lastResult, setLastResult] = useState<(AnswerResponse & { optionId: string }) | null>(null);
  const [busy, setBusy] = useState(false);
 
+ // Warm the translation cache for every visible scenario/customer/step string
+ // the moment the catalog or active scenario changes — keeps the picker AND
+ // the in-progress run in the active language without per-frame requests.
+ useEffect(() => {
+ const texts: string[] = [];
+ for (const s of scenarios) {
+ if (s.title) texts.push(s.title);
+ if (s.description) texts.push(s.description);
+ }
+ if (scenario) {
+ if (scenario.title) texts.push(scenario.title);
+ if (scenario.description) texts.push(scenario.description);
+ if (scenario.customer?.name) texts.push(scenario.customer.name);
+ if (scenario.customer?.purpose) texts.push(scenario.customer.purpose);
+ for (const step of scenario.steps ?? []) {
+ if (step.prompt) texts.push(step.prompt);
+ for (const opt of step.options ?? []) {
+ if (opt.text) texts.push(opt.text);
+ if (opt.feedback) texts.push(opt.feedback);
+ }
+ }
+ }
+ ensureMany(texts);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [scenarios, scenario, ensureMany]);
+
  const start = useCallback(
  async (id: string) => {
  if (!user) return;
  setBusy(true);
  try {
- const sc = await api.scenario(id);
+ const sc = await api.scenario(id, locale);
  const sess = await api.startSession(user.id, id);
  setScenario(sc);
  setSession(sess);
@@ -66,8 +95,24 @@ export default function Simulator() {
  setBusy(false);
  }
  },
- [user],
+ [user, locale],
  );
+
+ // When the user switches language mid-scenario, refetch so prompts/options
+ // flip on the fly instead of waiting for the LLM translation cache.
+ useEffect(() => {
+ if (!scenario) return;
+ (async () => {
+ try {
+ const sc = await api.scenario(scenario.id, locale);
+ setScenario(sc);
+ setCurrentStep((cur) => (cur ? sc.steps.find((s) => s.id === cur.id) ?? sc.steps[0] : sc.steps[0]));
+ } catch {
+ /* ignore — keep old version */
+ }
+ })();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [locale]);
 
  useEffect(() => {
  if (scenarioId && (!scenario || scenario.id !== scenarioId)) {
@@ -155,9 +200,9 @@ export default function Simulator() {
  </span>
  </div>
  <div className="flex-1">
- <h3 className="font-display text-lg font-semibold leading-tight">{s.title}</h3>
+ <h3 className="font-display text-lg font-semibold leading-tight">{translated(s.title)}</h3>
  <p className="mt-2 text-sm leading-relaxed text-navy-900/60 dark:text-white/60">
- {s.description}
+ {translated(s.description)}
  </p>
  </div>
  {course && !courseReady && (
@@ -212,7 +257,7 @@ export default function Simulator() {
  {grade}
  </div>
  <h1 className="hero-text mt-2">{t("sim.done.title")}</h1>
- <p className="mt-2 text-navy-900/60 dark:text-white/60">{scenario.title}</p>
+ <p className="mt-2 text-navy-900/60 dark:text-white/60">{translated(scenario.title)}</p>
  </div>
  <motion.div
  initial={{ opacity: 0, y: 20 }}
@@ -260,7 +305,7 @@ export default function Simulator() {
  </div>
 
  <div>
- <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">{scenario.title}</h1>
+ <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">{translated(scenario.title)}</h1>
  <div className="mt-3 flex items-center gap-3">
  <div className="text-xs uppercase tracking-wider text-navy-900/50 dark:text-white/50">
  {t("sim.step", { idx: stepIndex + 1, total: scenario.steps.length })}
@@ -285,7 +330,7 @@ export default function Simulator() {
  transition={{ type: "spring", stiffness: 220, damping: 24 }}
  className="glass p-7"
  >
- <h2 className="font-display text-xl font-semibold leading-snug">{currentStep.prompt}</h2>
+ <h2 className="font-display text-xl font-semibold leading-snug">{translated(currentStep.prompt)}</h2>
  <div className="mt-5 flex flex-col gap-3">
  {currentStep.options.map((opt, i) => {
  const isChosen = lastResult?.optionId === opt.id;
@@ -323,7 +368,7 @@ export default function Simulator() {
  >
  {correct ? <Check size={14} /> : wrong ? <X size={14} /> : opt.id.toUpperCase()}
  </div>
- <span className="leading-relaxed">{opt.text}</span>
+ <span className="leading-relaxed">{translated(opt.text)}</span>
  </motion.button>
  );
  })}
@@ -358,7 +403,7 @@ export default function Simulator() {
  )}
  </div>
  <div className="mt-1 leading-relaxed text-navy-900/80 dark:text-white/80">
- {lastResult.feedback}
+ {translated(lastResult.feedback)}
  </div>
  </div>
  <button
@@ -383,6 +428,7 @@ export default function Simulator() {
 
 function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string }) {
  const t = useT();
+ const { translated } = useTranslation();
  return (
  <motion.div
  initial={{ opacity: 0, scale: 0.96 }}
@@ -411,9 +457,9 @@ function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string
  </div>
  <div className="space-y-3 p-5 font-mono text-xs">
  <CustomerHeader scenario={scenario} />
- <FieldRow label={t("sim.fieldCustomer")} value={scenario.customer.name} />
+ <FieldRow label={t("sim.fieldCustomer")} value={translated(scenario.customer.name)} />
  <FieldRow label={t("sim.fieldDocument")} value={scenario.customer.document} />
- <FieldRow label={t("sim.fieldPurpose")} value={scenario.customer.purpose} />
+ <FieldRow label={t("sim.fieldPurpose")} value={translated(scenario.customer.purpose)} />
  <FieldRow label={t("sim.fieldStep")} value={stepId} mono />
  <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3 text-[10px] leading-relaxed text-slate-400">
  {t("sim.dlpNote")}
@@ -426,6 +472,7 @@ function SandboxFrame({ scenario, stepId }: { scenario: Scenario; stepId: string
 
 function CustomerHeader({ scenario }: { scenario: Scenario }) {
  const t = useT();
+ const { translated } = useTranslation();
  return (
  <div className="flex items-center gap-3 rounded-lg bg-gradient-to-r /15 to-transparent p-3">
  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white text-xs font-bold text-navy-900">
@@ -433,7 +480,7 @@ function CustomerHeader({ scenario }: { scenario: Scenario }) {
  </div>
  <div className="flex-1">
  <div className="text-[11px] text-slate-300">{t("sim.virtualCustomer")}</div>
- <div className="text-sm font-semibold text-white">{scenario.customer.name}</div>
+ <div className="text-sm font-semibold text-white">{translated(scenario.customer.name)}</div>
  </div>
  </div>
  );

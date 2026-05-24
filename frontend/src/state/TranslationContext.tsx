@@ -5,10 +5,8 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
-import { api, getToken } from "../api";
 import { Locale } from "../i18n";
 import { useLocale } from "./LocaleContext";
 
@@ -58,86 +56,38 @@ function saveCache(cache: Cache) {
 
 export function TranslationProvider({ children }: { children: ReactNode }) {
   const { locale } = useLocale();
-  const [cache, setCache] = useState<Cache>(() => loadCache());
-  const pendingRef = useRef<Set<string>>(new Set());
-  const [pendingTick, setPendingTick] = useState(0); // forces re-render when pending set changes
-  const flushTimer = useRef<number | null>(null);
-  const queueRef = useRef<Set<string>>(new Set());
+  const [cache] = useState<Cache>(() => loadCache());
 
-  // Persist any time the cache changes.
-  useEffect(() => {
-    saveCache(cache);
-  }, [cache]);
+  // IMPORTANT: ``ensure`` / ``ensureMany`` are intentionally no-ops now.
+  //
+  // Previously each open of a page (dashboard / courses / simulator) fanned out
+  // dozens of /api/translate calls so RU source strings would re-render in UZ
+  // or EN. That hammered the Gemini quota — every navigation burned tokens
+  // even though the user hadn't asked for anything. We now ship inline UZ/EN
+  // translations for the catalog + simulator content from the backend, and
+  // anything we don't have a translation for falls back to the source string.
+  //
+  // Gemini is hit only when the user actively talks to the mascot (/api/chat)
+  // or HR explicitly clicks "Translate" on a chat reply.
+  const ensure = useCallback((_text: string) => {
+    /* no-op: see comment above */
+  }, []);
 
-  const ensure = useCallback(
-    (text: string) => {
-      if (!text || locale === SOURCE_LOCALE) return;
-      if (!getToken()) return; // skip pre-auth (login/register screens)
-      if (cache[locale]?.[text]) return;
-      if (pendingRef.current.has(text)) return;
-      queueRef.current.add(text);
-
-      // Debounce: collect a few strings within ~80ms so the dashboard fires
-      // one bulk request instead of N parallel ones.
-      if (flushTimer.current !== null) return;
-      flushTimer.current = window.setTimeout(async () => {
-        flushTimer.current = null;
-        const batch = Array.from(queueRef.current).filter((t) => {
-          if (cache[locale]?.[t]) return false;
-          if (pendingRef.current.has(t)) return false;
-          return true;
-        });
-        queueRef.current.clear();
-        if (batch.length === 0) return;
-
-        batch.forEach((t) => pendingRef.current.add(t));
-        setPendingTick((n) => n + 1);
-
-        try {
-          const items: Record<string, string> = {};
-          batch.forEach((t, idx) => {
-            // Use a unique key per request — the response maps back to it.
-            items[`k${idx}`] = t;
-          });
-          const res = await api.translateBulk(items, locale);
-          setCache((prev) => {
-            const next: Cache = { ...prev, [locale]: { ...(prev[locale] ?? {}) } };
-            batch.forEach((t, idx) => {
-              const out = res.items[`k${idx}`];
-              if (out) next[locale][t] = out;
-            });
-            return next;
-          });
-        } catch {
-          /* keep original text on failure; UI will retry on the next ensure() */
-        } finally {
-          batch.forEach((t) => pendingRef.current.delete(t));
-          setPendingTick((n) => n + 1);
-        }
-      }, 80);
-    },
-    [locale, cache],
-  );
-
-  const ensureMany = useCallback(
-    (texts: string[]) => {
-      for (const t of texts) ensure(t);
-    },
-    [ensure],
-  );
+  const ensureMany = useCallback((_texts: string[]) => {
+    /* no-op: see comment above */
+  }, []);
 
   const translated = useCallback(
     (text: string) => {
       if (!text || locale === SOURCE_LOCALE) return text;
+      // Honour the cache if something already lives there from a prior session
+      // — we don't WRITE new entries, but old entries are still valid lookups.
       return cache[locale]?.[text] ?? text;
     },
     [cache, locale],
   );
 
-  const pending = useCallback(
-    (text: string) => locale !== SOURCE_LOCALE && pendingRef.current.has(text),
-    [locale, pendingTick],
-  );
+  const pending = useCallback((_text: string) => false, []);
 
   const value = useMemo<Ctx>(
     () => ({ translated, ensure, ensureMany, pending }),

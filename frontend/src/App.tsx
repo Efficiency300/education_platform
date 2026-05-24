@@ -25,6 +25,7 @@ import AdminRegulations from "./pages/admin/AdminRegulations";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminSettings from "./pages/admin/AdminSettings";
 import NorthScenarios from "./pages/admin/NorthScenarios";
+import NorsAssistant from "./components/NorsAssistant";
 import { useAuth } from "./state/AuthContext";
 import { Role } from "./api";
 
@@ -127,6 +128,7 @@ export default function App() {
         </main>
         <Toaster />
       </div>
+      <NorsAssistant />
     </div>
   );
 }

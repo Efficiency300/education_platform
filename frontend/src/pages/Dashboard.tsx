@@ -22,7 +22,6 @@ import ActivityFeed from "../components/ActivityFeed";
 import { useProgress } from "../state/ProgressContext";
 import { useT } from "../state/LocaleContext";
 import { useTranslation } from "../state/TranslationContext";
-import NorthPanel from "../components/north/NorthPanel";
 
 const ICON_MAP: Record<string, any> = {
   wallet: Wallet,
@@ -53,8 +52,7 @@ export default function Dashboard() {
   }, [courses, ensureMany]);
 
   return (
-    <div className="north-dashboard-shell">
-      <div className="north-dashboard-main flex flex-col gap-8">
+    <div className="flex flex-col gap-8">
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -307,25 +305,6 @@ export default function Dashboard() {
           <ActivityFeed items={activity} limit={6} />
         </GlassCard>
       </section>
-      </div>
-      {/* North lives alongside the dashboard — same height, sticky on desktop. */}
-      <NorthPanel />
-      <style>{`
-        .north-dashboard-shell {
-          display: flex;
-          gap: 0;
-          align-items: stretch;
-        }
-        .north-dashboard-main {
-          flex: 1;
-          min-width: 0;
-        }
-        @media (min-width: 768px) {
-          .north-dashboard-shell {
-            gap: 24px;
-          }
-        }
-      `}</style>
     </div>
   );
 }
