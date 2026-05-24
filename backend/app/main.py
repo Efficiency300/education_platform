@@ -497,7 +497,7 @@ BACKEND_ONBOARDING_SCENARIO = {
             "input_type": "none",
             "choices": [],
             "correct_answer": None,
-            "north_state": "watching",
+            "north_state": "listening",
             "on_complete_state": "celebrating",
             "content_ref": None,
         },

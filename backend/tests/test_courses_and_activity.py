@@ -8,7 +8,17 @@ async def test_courses_index_overlay(client, user_id):
     res = await client.get(f"/api/courses?user_id={user_id}")
     assert res.status_code == 200
     items = res.json()
-    assert len(items) == len(COURSES)
+    # The test user is in "Call Center" direction. The catalog now contains
+    # role-targeted courses (credit specialist, client manager, …) that aren't
+    # visible to them — only courses with no directions or with "Call Center"
+    # should land in the response.
+    visible_slugs = {
+        slug
+        for slug, course in COURSES.items()
+        if not course.get("directions") or "Call Center" in (course.get("directions") or [])
+    }
+    assert {it["slug"] for it in items} == visible_slugs
+    assert len(items) >= 1
     for it in items:
         assert it["lessons_completed"] == 0
         assert it["completed"] is False
