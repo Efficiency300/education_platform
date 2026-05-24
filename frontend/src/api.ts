@@ -45,7 +45,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       detail = await res.text().catch(() => "");
     }
     if (res.status === 401) {
-      setToken(null);
+      // Only clear the token when the server explicitly rejects it
+      // ("Invalid token" / "Invalid token payload" / "User not found").
+      // "Missing bearer token" means OUR side didn't include the header —
+      // wiping the token there starts a cascade: every subsequent request
+      // also has no token and also returns "Missing bearer token", which
+      // surfaces as a stuck error banner on the UI.
+      const invalidToken = /invalid token|user not found/i.test(detail);
+      if (invalidToken) {
+        setToken(null);
+      }
+      // Suppress the developer-y "Missing bearer token" so page error
+      // banners don't show internal phrasing — replace with neutral text.
+      if (/missing bearer token/i.test(detail)) {
+        throw new ApiError(res.status, "Unauthorized", "");
+      }
     }
     throw new ApiError(res.status, `${res.status} ${res.statusText}`, detail);
   }
